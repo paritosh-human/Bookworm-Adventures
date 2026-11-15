@@ -50,6 +50,14 @@ def main():
         xml = (RAW / "properties" / f"Book{b}.xml").read_text()
         comp(d, "map", f"map_b{b}.png")
         comp(d, "mapscreen_banner", f"banner_b{b}.png")
+        comp(d, "minimap_icons" if b != 2 else "minimap_icons-2", f"minimap_icons_b{b}.png")
+        for n in range(1, 11):
+            mm = comp(d, f"minimap_{b}-{n}", f"minimap_b{b}c{n}.png")
+            if mm is not None:  # greyscale/sepia twin: the not-yet-beaten part of the strip
+                g = mm.convert("LA")
+                r, gr, bl = g.convert("RGB").split()
+                sep = Image.merge("RGBA", (r.point(lambda v: int(v * 0.85)), gr.point(lambda v: int(v * 0.72)), bl.point(lambda v: int(v * 0.5)), mm.split()[3]))
+                sep.save(OUT / f"minimap_b{b}c{n}_sepia.png")
         for n in range(1, 11):
             m = re.search(rf'id="ICONANIM{n}"\s+path="([^"]+)"(?:\s+cols="(\d+)")?', xml)
             if not m:

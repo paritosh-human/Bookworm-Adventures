@@ -165,6 +165,7 @@ export class BattleScene extends Phaser.Scene {
     this.events.once('shutdown', () => this.cleanup());
 
     this.buildPotions();
+    this.buildProgress();
     this.buildTreasures();
     this.refreshHearts();
     this.loadMonsterActor(creaturePam(creature));
@@ -297,6 +298,51 @@ export class BattleScene extends Phaser.Scene {
   }
 
   // ---- speech bubbles (creatures/BookN/dialog/*.lua) ----
+  // ---- chapter progress strip (BattleEngine.DrawProgress): sepia minimap at (284,29), the beaten
+  // fraction in colour, Lex's icon at the edge and the chapter's boss icon at the end ----
+  private progressObjs: Phaser.GameObjects.Image[] = [];
+  private progressColor?: Phaser.GameObjects.Image;
+  private progressLex?: Phaser.GameObjects.Image;
+
+  private buildProgress() {
+    const { book, chapter } = this.progress;
+    const base = 'adventures/images/map/';
+    const keys = { col: `mm_b${book}c${chapter}`, sep: `mm_b${book}c${chapter}_s`, icons: `mmi_b${book}` };
+    const build = () => {
+      for (const o of this.progressObjs) o.destroy();
+      this.progressObjs = [];
+      if (!this.textures.exists(keys.col)) return;
+      const [x, y] = L(284, 29);
+      const w = this.textures.get(keys.col).getSourceImage().width;
+      const sep = this.add.image(x, y, keys.sep).setOrigin(0, 0).setDepth(DEPTH_UI);
+      this.progressColor = this.add.image(x, y, keys.col).setOrigin(0, 0).setDepth(DEPTH_UI + 1);
+      this.progressObjs.push(sep, this.progressColor);
+      if (this.textures.exists(keys.icons)) {
+        this.progressObjs.push(this.add.image(x + w - 20, y, keys.icons, chapter).setOrigin(0, 0).setDepth(DEPTH_UI + 2));
+        this.progressLex = this.add.image(x, y, keys.icons, 0).setOrigin(0.5, 0).setDepth(DEPTH_UI + 3);
+        this.progressObjs.push(this.progressLex);
+      }
+      this.updateProgress();
+    };
+    let need = 0;
+    const want: [string, string, (() => void) | null][] = [
+      [keys.col, `${base}minimap_b${book}c${chapter}.png`, null],
+      [keys.sep, `${base}minimap_b${book}c${chapter}_sepia.png`, null],
+    ];
+    for (const [k, u] of want) if (!this.textures.exists(k)) { this.load.image(k, u); need++; }
+    if (!this.textures.exists(keys.icons)) { this.load.spritesheet(keys.icons, `${base}minimap_icons_b${book}.png`, { frameWidth: 20, frameHeight: 20 }); need++; }
+    if (need) { this.load.once('complete', build); this.load.start(); } else build();
+  }
+
+  /** fraction of the chapter's enemies already beaten */
+  private updateProgress() {
+    if (!this.progressColor) return;
+    const w = this.progressColor.width;
+    const frac = this.progress.enemy / Math.max(this.chapter.enemies.length, 1);
+    this.progressColor.setCrop(0, 0, Math.max(0, w * frac), this.progressColor.height);
+    this.progressLex?.setX(this.progressColor.x + Math.min(Math.max(w * frac, 10), w - 30));
+  }
+
   private bubbles: Partial<Record<'lex' | 'enemy', Phaser.GameObjects.Container>> = {};
   private say(who: 'lex' | 'enemy', text: string, ms = 2400) {
     this.bubbles[who]?.destroy();
@@ -810,6 +856,7 @@ export class BattleScene extends Phaser.Scene {
       p.enemy = nextEnemy;
     }
     setAdvProgress(GAME, p);
+    this.updateProgress();
 
     this.time.delayedCall(1400, () =>
       this.showContinue(label, () => {
