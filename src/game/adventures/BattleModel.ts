@@ -79,6 +79,10 @@ export class BattleModel {
   readonly mods: TreasureMods;
   /** the enemy loses its next turn (Magic Pen) */
   enemySkips = false;
+  /** Ruby / Amethyst: damage over time on the enemy */
+  enemyAilments: { kind: 'burn' | 'poison'; dmg: number; turns: number }[] = [];
+  /** Crystal: Lex takes no damage for this many enemy turns */
+  lexInvincible = 0;
   /** hearts Lex healed by the last word (Tablet of the Ages) */
   lastWordHeal = 0;
   lastWordPurify = false;
@@ -151,6 +155,9 @@ export class BattleModel {
   enemyTurn(): EnemyTurn {
     this.turn++;
     for (const s of this.attacks) s.counter++;
+    for (const a of this.enemyAilments) { this.enemy = Math.max(0, this.enemy - a.dmg); a.turns--; }
+    this.enemyAilments = this.enemyAilments.filter((a) => a.turns > 0);
+    if (this.enemy <= 0) return { attackName: '', attackFrame: 'idle', description: '', damage: 0, healed: 0, stunned: false, newAilments: [], tiles: [], ailmentDamage: 0, weakened: false, boosted: false, lexDead: false, skipped: true, resisted: [] };
     const skipped = this.enemySkips;
     this.enemySkips = false;
     const pick = skipped ? null : chooseAttack(this.attacks, this.rand);
@@ -173,6 +180,7 @@ export class BattleModel {
       a.turns--;
     }
     this.ailments = this.ailments.filter((a) => a.turns > 0);
+    if (this.lexInvincible > 0) this.lexInvincible--;
     result.lexDead = this.lex <= 0;
     return result;
   }
@@ -190,8 +198,9 @@ export class BattleModel {
             for (const x of this.enemyMults) x.turns--;
             this.enemyMults = this.enemyMults.filter((x) => x.turns > 0);
           }
+          if (this.lexInvincible > 0) d = 0;
           d = floorQ(d - this.bonus.defense - this.mods.damageReduction);
-          d = this.mods.damageReduction > 0 ? Math.max(0, d) : Math.max(0.25, d);
+          d = this.mods.damageReduction > 0 || this.lexInvincible > 0 ? Math.max(0, d) : Math.max(0.25, d);
           if (d === 0) r.resisted.push('damage');
           this.lex = Math.max(0, this.lex - d);
           r.damage += d;

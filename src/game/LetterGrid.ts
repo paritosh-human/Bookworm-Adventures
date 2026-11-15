@@ -18,7 +18,8 @@ export interface GridTile {
   overlay?: Phaser.GameObjects.Image;
 }
 
-export const DISABLING = ['smash', 'petrify', 'lock'];
+// smashed tiles stay selectable (they just deal no damage); locked / petrified ones cannot be picked
+export const DISABLING = ['petrify', 'lock'];
 
 export interface LetterGridOptions {
   scene: Phaser.Scene;

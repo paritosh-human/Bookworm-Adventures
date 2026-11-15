@@ -6,6 +6,8 @@ import { loadPamActorAssets, pamImageTextureKey } from '../game/pam/pamLoader';
 import { PamActor } from '../game/pam/PamActor';
 import { bookNumbers, creaturePam, getBook, getChapter, getCreature, getTreasure } from '../game/adventures/gameData';
 import { combineTreasures } from '../game/adventures/treasures';
+import { TILE_HINTS } from '../game/adventures/hints';
+import { ENEMY_OFFSETS } from '../game/adventures/enemyOffsets';
 import { BattleModel, levelForXp, type EnemyTurn, type TileRequest } from '../game/adventures/BattleModel';
 import { GEM_BONUS_PCT, MIN_WORD_LENGTH, lexAttackFrame, rollGem, rollPotion, type Potion } from '../game/adventures/rules';
 import { letterDef } from '../game/letterTiles';
@@ -86,6 +88,10 @@ export class BattleScene extends Phaser.Scene {
     this.enemyHearts = [];
     this.attackLines = [];
     this.sceneryLayers = [];
+    this.hintQueue = [];
+    this.hintOpen = false;
+    this.floaters = new Map();
+    this.bubbles = {};
   }
 
   private get chapter() {
@@ -164,8 +170,8 @@ export class BattleScene extends Phaser.Scene {
     this.input.keyboard?.on('keydown-BACKSPACE', () => this.grid.clearSelection());
     this.events.once('shutdown', () => this.cleanup());
 
-    this.buildPotions();
     this.buildProgress();
+    this.buildPotions();
     this.buildTreasures();
     this.refreshHearts();
     this.loadMonsterActor(creaturePam(creature));
@@ -297,7 +303,6 @@ export class BattleScene extends Phaser.Scene {
     this.floaters.clear();
   }
 
-  // ---- speech bubbles (creatures/BookN/dialog/*.lua) ----
   // ---- chapter progress strip (BattleEngine.DrawProgress): sepia minimap at (284,29), the beaten
   // fraction in colour, Lex's icon at the edge and the chapter's boss icon at the end ----
   private progressObjs: Phaser.GameObjects.Image[] = [];
@@ -343,6 +348,64 @@ export class BattleScene extends Phaser.Scene {
     this.progressLex?.setX(this.progressColor.x + Math.min(Math.max(w * frac, 10), w - 30));
   }
 
+  // ---- "Hint!" box the first time a special tile appears (ArrowHint) ----
+  private hintQueue: { kind: string; tile?: GridTile }[] = [];
+  private hintOpen = false;
+
+  private queueHint(kind: string) {
+    const seen = this.progress.seenHints ?? [];
+    if (seen.includes(kind) || this.hintQueue.some((h) => h.kind === kind) || !TILE_HINTS[kind]) return;
+    const tile = this.grid.allTiles().find((t) => t.gem === kind || t.status?.kind === kind);
+    this.hintQueue.push({ kind, tile });
+  }
+
+  /** Shows the next pending hint; returns true if one opened (input stays locked until clicked). */
+  private showNextHint(): boolean {
+    const h = this.hintQueue.shift();
+    if (!h || this.hintOpen) return false;
+    const hint = TILE_HINTS[h.kind];
+    this.progress.seenHints = [...(this.progress.seenHints ?? []), h.kind];
+    setAdvProgress(GAME, this.progress);
+    this.hintOpen = true;
+    this.busy = true;
+    const W = 330;
+    const objs: Phaser.GameObjects.GameObject[] = [];
+    const style = { fontFamily: 'Georgia, serif', fontSize: '13px' };
+    // measure rows first
+    const rows = hint.lines.map((line) => line.split('#').map((seg, i) => ({ seg, hi: i % 2 === 1 })));
+    const H = 70 + rows.length * 22 + 20;
+    const tx = h.tile ? h.tile.bg.x : L(400, 0)[0];
+    const bx = Math.min(Math.max(tx, L(W / 2 + 10, 0)[0]), L(790 - W / 2, 0)[0]);
+    const by = L(0, 215 - H)[1];
+    const box = this.add.nineslice(bx, by + H / 2, 'hint_box', undefined, W, H, 30, 30, 30, 30).setDepth(DEPTH_BANNER + 5);
+    objs.push(box);
+    objs.push(this.add.image(bx, by + 2, 'hint_title').setDepth(DEPTH_BANNER + 6));
+    objs.push(this.add.text(bx, by + 28, hint.title, { ...style, fontSize: '15px', fontStyle: 'bold', color: '#ffe28a' }).setOrigin(0.5, 0).setDepth(DEPTH_BANNER + 6));
+    rows.forEach((segs, ri) => {
+      const texts = segs.map((s2) => this.add.text(0, 0, s2.seg, { ...style, color: s2.hi ? '#ff6a4d' : '#f2e6c9', fontStyle: s2.hi ? 'bold' : 'normal' }).setDepth(DEPTH_BANNER + 6));
+      const total = texts.reduce((a, t) => a + t.width, 0);
+      let x = bx - total / 2;
+      for (const t of texts) { t.setPosition(x, by + 54 + ri * 22); x += t.width; objs.push(t); }
+    });
+    objs.push(this.add.text(bx, by + H - 20, 'Click to continue', { ...style, fontSize: '10px', color: '#a08a5f' }).setOrigin(0.5).setDepth(DEPTH_BANNER + 6));
+    if (h.tile && this.textures.exists('hint_down')) {
+      objs.push(this.add.image(h.tile.bg.x, by + H + 12, 'hint_down').setDepth(DEPTH_BANNER + 6));
+      // glow the tile being explained
+      this.tweens.add({ targets: [h.tile.bg], alpha: 0.4, yoyo: true, repeat: 5, duration: 250, onComplete: () => h.tile!.bg.setAlpha(1) });
+    }
+    box.setInteractive({ useHandCursor: true }).on('pointerdown', () => {
+      for (const o of objs) o.destroy();
+      this.hintOpen = false;
+      if (!this.showNextHint()) {
+        this.busy = false;
+        this.setButtonEnabled(this.attackBtn, true);
+        this.setButtonEnabled(this.scrambleBtn, true);
+      }
+    });
+    return true;
+  }
+
+  // ---- speech bubbles (creatures/BookN/dialog/*.lua) ----
   private bubbles: Partial<Record<'lex' | 'enemy', Phaser.GameObjects.Container>> = {};
   private say(who: 'lex' | 'enemy', text: string, ms = 2400) {
     this.bubbles[who]?.destroy();
@@ -432,7 +495,7 @@ export class BattleScene extends Phaser.Scene {
       const pam = await loadPamActorAssets(this, stem);
       if (!this.sys.isActive()) return;
       // Enemy pams are authored right-aligned on the 800px stage (a 400px pam sits at x=400).
-      const [x, y] = L(800 - (pam.size?.[0] ?? 400) * ACTOR_SCALE + 200 + offsetX, STAGE_Y - 45);
+      const [x, y] = L(800 - (pam.size?.[0] ?? 400) * ACTOR_SCALE + 200 + offsetX + (ENEMY_OFFSETS[stem]?.x ?? 0), STAGE_Y - 45 + (ENEMY_OFFSETS[stem]?.y ?? 0));
       this.monsterActor = new PamActor(this, x, y, pam, 'idle', pamImageTextureKey, { fit: false });
       this.monsterActor.root.setScale(ACTOR_SCALE);
       this.monsterActor.root.setDepth(DEPTH_ACTORS);
@@ -492,7 +555,10 @@ export class BattleScene extends Phaser.Scene {
           this.model.heal(99); this.model.purifyLex(); this.grid.clearStatuses();
           for (const k of ['health', 'attack', 'purify'] as const) this.addPotion(k);
           break;
-        case 'crystal': this.model.purifyLex(); this.grid.clearStatuses(); break;
+        case 'crystal': this.model.purifyLex(); this.grid.clearStatuses(); this.model.lexInvincible = 1; break;
+        case 'ruby': this.model.enemyAilments.push({ kind: 'burn', dmg: 0.5, turns: 3 }); break; // APPROX numbers
+        case 'amethyst': this.model.enemyAilments.push({ kind: 'poison', dmg: 0.25, turns: 4 }); break;
+        case 'saphire': this.model.enemySkips = true; break;
         case 'garnet': this.model.enemyMults.push({ mult: 0.5, turns: 2 }); break;
         default: break;
       }
@@ -514,7 +580,9 @@ export class BattleScene extends Phaser.Scene {
     if (this.cache.audio.exists('lex_chomp')) this.sound.play('lex_chomp');
 
     this.showAttackInfo(null);
-    const damage = this.model.playerAttack(word, this.gemBonus(tiles));
+    // smashed and plagued tiles may be used but deal no damage (tile tooltips)
+    const dmgWord = tiles.filter((t) => t.status?.kind !== 'smash' && t.status?.kind !== 'plague').map((t) => t.def.letter).join('');
+    const damage = dmgWord.length >= MIN_WORD_LENGTH ? this.model.playerAttack(dmgWord, this.gemBonus(tiles)) : this.model.playerAttack('', 0);
     this.recordBestWord(word, damage);
     this.consumeFloaters();
     this.applyGemEffects(tiles);
@@ -539,7 +607,10 @@ export class BattleScene extends Phaser.Scene {
     const gem = rollGem(len, Math.random, this.model.mods.gemChanceMult);
     if (!gem) return;
     const candidates = this.grid.allTiles().filter((t) => !t.gem && !t.status);
-    if (candidates.length) this.grid.setGem(pick(replaced.filter((t) => !t.status).concat(candidates)), gem);
+    if (candidates.length) {
+      this.grid.setGem(pick(replaced.filter((t) => !t.status).concat(candidates)), gem);
+      this.queueHint(gem);
+    }
   }
 
   private handleScramble() {
@@ -556,6 +627,11 @@ export class BattleScene extends Phaser.Scene {
   private runEnemyTurn() {
     if (this.over) return;
     const turn = this.model.enemyTurn();
+    if (this.model.enemyDead) {
+      this.refreshHearts();
+      this.handleVictory();
+      return;
+    }
     this.showEnemyTurn(turn);
     this.refreshHearts();
     if (turn.attackName) this.showAttackInfo(turn.attackName, turn.description);
@@ -587,6 +663,7 @@ export class BattleScene extends Phaser.Scene {
       return;
     }
     this.time.delayedCall(700, () => {
+      if (this.showNextHint()) return;
       this.busy = false;
       this.setButtonEnabled(this.attackBtn, true);
       this.setButtonEnabled(this.scrambleBtn, true);
@@ -622,9 +699,11 @@ export class BattleScene extends Phaser.Scene {
           case 'lock':
           case 'petrify':
             this.grid.setStatus(tile, { kind: r.kind, turns: r.turns });
+            this.queueHint(r.kind);
             break;
           case 'plague':
             this.grid.setStatus(tile, { kind: 'plague', turns: 0 });
+            this.queueHint('plague');
             break;
           case 'steal': {
             const gems = this.grid.allTiles().filter((t) => t.gem);
@@ -855,8 +934,8 @@ export class BattleScene extends Phaser.Scene {
     } else {
       p.enemy = nextEnemy;
     }
-    setAdvProgress(GAME, p);
     this.updateProgress();
+    setAdvProgress(GAME, p);
 
     this.time.delayedCall(1400, () =>
       this.showContinue(label, () => {

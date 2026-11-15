@@ -39,6 +39,8 @@ export interface AdvProgress {
   hearts?: number;
   /** chapters already beaten, "book-chapter" */
   done: string[];
+  /** special-tile kinds whose "Hint!" box has already been shown */
+  seenHints?: string[];
   potions?: { health: number; attack: number; purify: number };
   /** treasure script ids won from bosses, oldest first; the newest three are equipped (APPROX) */
   treasures?: string[];

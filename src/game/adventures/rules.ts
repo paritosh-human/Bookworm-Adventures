@@ -97,10 +97,10 @@ export function chooseAttack(states: AttackState[], rand: () => number = Math.ra
 
 // ---- gems ----
 // Gem effects come from tiles/*Tile.lua (emerald heals 2, crystal purifies, garnet halves the
-// enemy's next two attacks, diamond heals fully + grants potions). GEM_BONUS_PCT lives in native
-// code, so the percentages are APPROX. Spawn chances use config.xml BonusChanceBase/Max.
+// enemy's next two attacks, diamond heals fully + grants potions); texts in hints.ts.
 export const GEM_BONUS_PCT: Record<string, number> = {
-  topaz: 0.1, amethyst: 0.15, ruby: 0.2, saphire: 0.25, emerald: 0.1, garnet: 0.15, crystal: 0.2, diamond: 0.3,
+  // BattleEngine.lua GEM_BONUS_PCT (topaz's 10% is from its tooltip)
+  topaz: 0.1, amethyst: 0.15, saphire: 0.25, emerald: 0.2, garnet: 0.3, ruby: 0.35, crystal: 0.5, diamond: 1.0,
 };
 export const GEM_POWER: Record<string, number> = {
   topaz: 1, amethyst: 1, ruby: 2, saphire: 2, emerald: 2, garnet: 2, crystal: 3, diamond: 3,

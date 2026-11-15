@@ -36,6 +36,7 @@ export class BootScene extends Phaser.Scene {
     this.load.audio('newtreasure', 'adventures/sounds/newtreasure.ogg');
     this.load.image('bestword_paper', 'adventures/images/bestword_paper.png');
     this.load.image('bestword_title', 'adventures/images/bestword_title.png');
+    for (const k of ['box', 'title', 'down']) this.load.image(`hint_${k}`, `adventures/images/hint_${k}.png`);
     this.load.image('boss_banner', 'adventures/images/boss_banner.png');
     this.load.image('boss_text', 'adventures/images/boss_text.png');
     this.load.image('checkpoint_reached', 'adventures/images/checkpoint_reached.png');
