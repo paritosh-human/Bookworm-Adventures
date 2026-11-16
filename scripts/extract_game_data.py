@@ -214,27 +214,65 @@ def best_pam_first(game: str, c: dict) -> None:
     c["pam"].sort(key=lambda st: -len(need & pam_labels(game, st)))
 
 
+def parse_defenses(text: str) -> list:
+    """Named PAMDefaultDefend entries (armor, immunities, bonus word categories) + the creature's
+    WordEffect damage multiplier (applies to its 'Bonus category' defense)."""
+    out, seen = [], set()
+    for m in re.finditer(r'PAMDefaultDefend:new\(mPAM, "[^"]*", [^,]+, [^,]+, "([^"]+)", "([^"]*)"', text):
+        if m.group(1) in seen:
+            continue
+        seen.add(m.group(1))
+        out.append({"name": m.group(1), "description": m.group(2)})
+    mult = re.search(r"WordEffect:new\(DamageMultiplierEffect:new\(([\d.]+)", text)
+    return {"list": out, "bonusMult": float(mult.group(1)) if mult else 2.0}
+
+
+def parse_wordlists(game: str) -> dict:
+    sys.path.insert(0, str(ROOT / "scripts"))
+    from luc import load
+    res = {}
+    for f in (ROOT / "raw-assets" / game / "scripts/wordlists").glob("*.luc"):
+        _, proto = load(f)
+        words = []
+        def walk(pr):
+            words.extend(c.lower() for c in pr.consts if isinstance(c, str) and c.isalpha())
+            for sp in pr.protos:
+                walk(sp)
+        walk(proto)
+        res[f.stem] = sorted(set(words))
+    return res
+
+
 def parse_dialog(path: Path) -> dict:
-    """creatures/BookN/dialog/X.lua -> {intro, attack, death}. Two-argument lines before the first
-    attack line are intro text, after the last attack line they are death text."""
+    """creatures/BookN/dialog/X.lua -> {intro, attack, death}.
+    Each dialog call is preceded by a decompiler comment `-- ALTSELF ... c=N`: N identifies the
+    method (AddIntroText / AddAttackText / AddDeathText) within a file. Attack lines carry 3+
+    arguments; of the two-argument groups the first (in file order) is intro text and the second
+    is death text (what is said when Lex is defeated)."""
+    text = path.read_text()
     lines = []
-    for m in re.finditer(r'PAMBasedEnemy\((?:R2|t), ("(?:[^"\\]|\\.)*"), (.*)\)$', path.read_text(), re.M):
-        text = m.group(1)[1:-1].replace("\\n", "\n")
-        args = [a.strip() for a in m.group(2).split(",")]
-        lines.append((text, args))
-    first = next((i for i, (_, a) in enumerate(lines) if len(a) >= 3), len(lines))
-    last = max((i for i, (_, a) in enumerate(lines) if len(a) >= 3), default=-1)
+    for m in re.finditer(r'(?:-- ALTSELF a=\d+ b=\d+ c=(\d+) bx=\d+\n\s*)?PAMBasedEnemy\((?:R2|t), ("(?:[^"\\]|\\.)*"), (.*)\)$', text, re.M):
+        c = m.group(1)
+        t = m.group(2)[1:-1].replace("\\n", "\n")
+        args = [a.strip() for a in m.group(3).split(",")]
+        lines.append((c, t, args))
+    groups = []  # distinct c values of two-argument lines in order of appearance
+    for c, _, args in lines:
+        if len(args) < 3 and c not in groups:
+            groups.append(c)
     d = {"intro": [], "attack": [], "death": []}
-    for i, (text, a) in enumerate(lines):
-        speaker = "lex" if "DIALOG_LEX" in a else "enemy"
-        if len(a) >= 3:
-            d["attack"].append({"text": text, "speaker": speaker, "attacker": "lex" if a[0] == "ATTACKER_LEX" else "enemy", "effect": a[2]})
-        elif i < first:
-            d["intro"].append({"text": text, "speaker": speaker})
-        elif i > last:
-            d["death"].append({"text": text, "speaker": speaker})
+    attack_idx = [i for i, (_, _, a) in enumerate(lines) if len(a) >= 3]
+    first, last = (attack_idx[0], attack_idx[-1]) if attack_idx else (None, None)
+    for i, (c, t, args) in enumerate(lines):
+        speaker = "lex" if "DIALOG_LEX" in args else "enemy"
+        if len(args) >= 3:
+            d["attack"].append({"text": t, "speaker": speaker, "attacker": "lex" if args[0] == "ATTACKER_LEX" else "enemy", "effect": args[2]})
+        elif first is not None:
+            # authoring order is intro lines, attack lines, death lines
+            (d["intro"] if i < first else d["death"]).append({"text": t, "speaker": speaker})
         else:
-            d["intro"].append({"text": text, "speaker": speaker})
+            # no attack lines to anchor on: the first call group is intro, the next one death
+            (d["intro"] if c == groups[0] else d["death"]).append({"text": t, "speaker": speaker})
     return d
 
 
@@ -332,7 +370,7 @@ def main():
     data = {}
     for game in ("adventures", "adventures-vol2"):
         base = DECOMP / game / "scripts"
-        g = {"books": {}, "creatures": {}, "treasures": parse_treasures(base)}
+        g = {"books": {}, "creatures": {}, "treasures": parse_treasures(base), "wordlists": parse_wordlists(game)}
         for bp in sorted((base / "books").glob("Book[0-9].lua")):
             num = int(re.search(r"\d", bp.stem).group())
             book = parse_book(bp)
@@ -347,6 +385,7 @@ def main():
             c = parse_creature(cp)
             if c:
                 best_pam_first(game, c)
+                c["defenses"] = parse_defenses(cp.read_text())
                 dlg = cp.parent / "dialog" / cp.name
                 c["dialog"] = parse_dialog(dlg) if dlg.exists() else {"intro": [], "attack": [], "death": []}
                 c["book"] = int(re.search(r"Book(\d+)", str(cp)).group(1))

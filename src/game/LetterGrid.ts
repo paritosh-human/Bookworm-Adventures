@@ -16,6 +16,8 @@ export interface GridTile {
   /** Adventures: enemy-inflicted tile state. smash/petrify/lock disable the tile. */
   status?: { kind: 'smash' | 'petrify' | 'lock' | 'plague'; turns: number };
   overlay?: Phaser.GameObjects.Image;
+  /** turns left on a smash / lock / petrify ("returns to normal when the number reaches zero") */
+  counter?: Phaser.GameObjects.Text;
 }
 
 // smashed tiles stay selectable (they just deal no damage); locked / petrified ones cannot be picked
@@ -147,7 +149,27 @@ export class LetterGrid {
   }
 
   /** Re-skin a tile from its selected / gem / status state. */
+  private updateCounter(tile: GridTile) {
+    const st = tile.status;
+    const show = !!st && st.kind !== 'plague' && st.turns > 0;
+    if (!show) {
+      tile.counter?.destroy();
+      tile.counter = undefined;
+      return;
+    }
+    const { scene, tileSize } = this.opts;
+    if (!tile.counter) {
+      tile.counter = scene.add
+        .text(tile.bg.x - tileSize / 2 + 9, tile.bg.y - tileSize / 2 + 9, '', { fontFamily: 'Georgia, serif', fontSize: '15px', fontStyle: 'bold', color: '#ffffff' })
+        .setOrigin(0.5)
+        .setStroke('#7a0f0f', 4)
+        .setDepth(tile.bg.depth + 2);
+    }
+    tile.counter.setText(String(st!.turns));
+  }
+
   applyLook(tile: GridTile) {
+    this.updateCounter(tile);
     const isSelected = this.selected.includes(tile);
     const scene = this.opts.scene;
     if (tile.bg instanceof Phaser.GameObjects.Image && this.opts.tileSheet) {
@@ -203,6 +225,8 @@ export class LetterGrid {
       if (st.turns <= 0) {
         tile.status = undefined;
         this.replaceTiles([tile]);
+      } else {
+        this.applyLook(tile); // refresh the countdown number
       }
     }
   }
@@ -284,6 +308,7 @@ export class LetterGrid {
         tile.burnBar?.destroy();
         tile.pip?.destroy();
         tile.overlay?.destroy();
+        tile.counter?.destroy();
       }
     }
   }

@@ -25,7 +25,7 @@ const MoveFlag = {
 export interface ImageInfo {
   name: string;
   /** [rotationDegreesIshUnits, x, y] registration/anchor offset for this image. */
-  transform: [number, number, number];
+  transform: [number, number, number] | [number, number, number, number, number, number];
 }
 
 export interface AddsInfo {
@@ -50,6 +50,8 @@ export interface FrameInfo {
   remove: { index: number }[];
   append: AddsInfo[];
   change: MovesInfo[];
+  /** engine commands attached to the frame, e.g. ['slide', '-390 20'] or ['causeDamage', ''] */
+  commands: [string, string][];
 }
 
 export interface SpriteInfo {
@@ -103,8 +105,18 @@ class Reader {
   }
 }
 
-function readImageInfo(r: Reader): ImageInfo {
+function readImageInfo(r: Reader, version: number): ImageInfo {
   const name = r.string();
+  if (version >= 2) {
+    // v2+: full 2x2 matrix (16.16) + translation (twips)
+    const a = r.i32() / 65536;
+    const b = r.i32() / 65536;
+    const c = r.i32() / 65536;
+    const d = r.i32() / 65536;
+    const tx = r.i16() / 20;
+    const ty = r.i16() / 20;
+    return { name, transform: [a, c, b, d, tx, ty] };
+  }
   const rotation = r.i16() / 1000;
   const x = r.i16() / 20;
   const y = r.i16() / 20;
@@ -175,7 +187,7 @@ function readMovesInfo(r: Reader): MovesInfo {
 
 function readFrameInfo(r: Reader): FrameInfo {
   const flags = r.u8();
-  const frame: FrameInfo = { label: null, stop: false, remove: [], append: [], change: [] };
+  const frame: FrameInfo = { label: null, stop: false, remove: [], append: [], change: [], commands: [] };
 
   if (flags & FrameFlag.REMOVES) {
     let count = r.u8();
@@ -197,8 +209,9 @@ function readFrameInfo(r: Reader): FrameInfo {
   if (flags & FrameFlag.COMMANDS) {
     const count = r.u8();
     for (let i = 0; i < count; i++) {
-      r.string();
-      r.string();
+      const name = r.string();
+      const arg = r.string();
+      frame.commands.push([name, arg]);
     }
   }
   return frame;
@@ -237,7 +250,7 @@ export function decodePam(buffer: ArrayBuffer): PamInfo {
 
   const imageCount = r.u16();
   const image: ImageInfo[] = [];
-  for (let i = 0; i < imageCount; i++) image.push(readImageInfo(r));
+  for (let i = 0; i < imageCount; i++) image.push(readImageInfo(r, version));
 
   const spriteCount = r.u16();
   const sprite: SpriteInfo[] = [];

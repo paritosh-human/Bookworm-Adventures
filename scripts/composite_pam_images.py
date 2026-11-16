@@ -6,13 +6,19 @@ separate grayscale alpha mask (`<name>_.gif`), since JPEG has no alpha
 channel. This recombines each pair into a single transparent PNG so the
 pieces render correctly over any background instead of as opaque boxes.
 """
+import shutil
 import sys
 from pathlib import Path
 
 from PIL import Image
 
-SRC = Path("raw-assets/adventures/images/pam/images")
-DST = Path("public/adventures/pam/images_rgba")
+# Usage: composite_pam_images.py [GAME]   (GAME = adventures | adventures-vol2, default adventures)
+GAME = sys.argv[1] if len(sys.argv) > 1 else "adventures"
+ROOT = Path(__file__).resolve().parent.parent
+PAM_SRC = ROOT / "raw-assets" / GAME / "images/pam"
+SRC = PAM_SRC / "images"
+PAM_DST = ROOT / "public" / GAME / "pam"
+DST = PAM_DST / "images_rgba"
 
 
 def composite_one(base_name: str) -> bool:
@@ -26,8 +32,11 @@ def composite_one(base_name: str) -> bool:
     if color_path is None:
         return False
 
-    color = Image.open(color_path).convert("RGB")
-    if mask_path.exists():
+    src = Image.open(color_path)
+    color = src.convert("RGB")
+    if not mask_path.exists() and "A" in src.getbands():
+        mask = src.convert("RGBA").getchannel("A")  # already-RGBA png: keep its own alpha
+    elif mask_path.exists():
         mask = Image.open(mask_path).convert("L")
         if mask.size != color.size:
             mask = mask.resize(color.size)
@@ -52,6 +61,14 @@ def main():
     } | {
         p.stem for p in SRC.glob("*.png")
     })
+    # copy the .pam animation files next to the composited parts
+    copied = 0
+    for p in sorted(PAM_SRC.glob("*.pam")):
+        d = PAM_DST / p.name
+        if not d.exists() or d.read_bytes() != p.read_bytes():
+            shutil.copyfile(p, d)
+            copied += 1
+    print(f"copied {copied} new/changed .pam files -> {PAM_DST}")
     done = 0
     for name in base_names:
         if composite_one(name):

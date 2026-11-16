@@ -48,3 +48,13 @@ assert.equal(m3.usePotion('health'), false);                    // already full
 assert.equal(m3.usePotion('attack'), true); assert.equal(m3.usePotion('attack'), false);
 assert.equal(m3.playerAttack('sun'), 1);                        // x2 of 0.5
 console.log('treasures/potions OK');
+
+// defenses
+import { buildDefense } from '../src/game/adventures/defenses.ts';
+const lion = { ...c, defenses: { list: [{ name: "Bonus category: 'felines'", description: "Spell 'feline' words for extra damage." }, { name: '3-letter immunity', description: 'Immune to words 3-letters long.' }, { name: 'Armored', description: 'Enemy is resistant to damage.' }], bonusMult: 3.5 } };
+const dp = buildDefense(lion as never, { bigcats: ['lion', 'lynx'] });
+assert.deepEqual(dp.immuneLengths, [3]); assert.equal(dp.resist, 0.75); assert.equal(dp.bonus[0].mult, 3.5);
+const m4 = new BattleModel(lion as never, 1, undefined, () => 0.5, undefined, dp);
+assert.equal(m4.playerAttack('sun'), 0); assert.equal(m4.lastWordNote, 'immune');
+const before = m4.enemy; const d4 = m4.playerAttack('lion'); assert.equal(m4.lastWordNote, 'bonus'); assert.ok(d4 > 0.75 * 0.75 && m4.enemy === before - d4);
+console.log('defenses OK');

@@ -173,3 +173,8 @@ Not built yet: potion/treasure items on the pedestals, Lex's Level-up banner/XP 
   (some scripts also list cutscene pams) and now reads Book 3 style `"images/pam/6Grim"` references.
 - Lex's attack labels (attack1..7) are bite / torpedo / big-bite / meteor poses inside `lex.pam`; the engine
   picks one by word length (see `lexAttackFrame`). I found no thrown-book sprites in `lex.pam`.
+
+### Enemy defenses, sounds, Volume 2 plumbing
+- `defenses.ts` reads each enemy's named defenses (armor, immunities, word-length immunity, bonus word lists
+  from `scripts/wordlists`). `sfx.ts` + `sounds.json` play per-creature attack/hit/engage/death sounds.
+- `gameContext.ts` switches between `adventures` and `adventures2` (asset folder `public/adventures-vol2`).

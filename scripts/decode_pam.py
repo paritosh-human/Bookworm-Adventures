@@ -49,12 +49,18 @@ class Reader:
         return s
 
 
-def read_image_info(r: Reader):
+def read_image_info(r: Reader, version: int = 1):
     name = r.string()
-    rotation = r.i16() / 1000.0
+    if version == 1:
+        rotation = r.i16() / 1000.0
+        x = r.i16() / 20.0
+        y = r.i16() / 20.0
+        return {"name": name, "transform": [rotation, x, y]}
+    # v2+: full 2x2 matrix (16.16) + translation (twips)
+    a, b, c, d = (r.i32() / 65536.0 for _ in range(4))
     x = r.i16() / 20.0
     y = r.i16() / 20.0
-    return {"name": name, "transform": [rotation, x, y]}
+    return {"name": name, "transform": [a, c, b, d, x, y]}
 
 
 def read_removes_info(r: Reader):
@@ -192,7 +198,7 @@ def decode_pam(path: Path):
     size = [r.u16() / 20.0, r.u16() / 20.0]
 
     images_count = r.u16()
-    images = [read_image_info(r) for _ in range(images_count)]
+    images = [read_image_info(r, version) for _ in range(images_count)]
 
     sprites_count = r.u16()
     sprites = [read_sprite_info(r, version) for _ in range(sprites_count)]

@@ -34,7 +34,15 @@ const COLORS = ['red', 'blue', 'green', 'yellow', 'orange', 'purple', 'violet', 
 const METALS = ['iron', 'steel', 'gold', 'silver', 'copper', 'tin', 'lead', 'zinc', 'brass', 'bronze', 'nickel', 'metal', 'chrome', 'platinum', 'mercury', 'cobalt', 'titanium', 'alloy', 'aluminum'];
 const MAMMALS = ['cat', 'dog', 'bat', 'rat', 'cow', 'pig', 'ape', 'elk', 'fox', 'bear', 'deer', 'lion', 'wolf', 'goat', 'seal', 'mole', 'mouse', 'horse', 'sheep', 'tiger', 'whale', 'camel', 'zebra', 'otter', 'moose', 'rabbit', 'monkey', 'hyena', 'badger', 'beaver', 'donkey', 'walrus', 'weasel', 'gorilla', 'giraffe', 'panther', 'leopard', 'buffalo', 'dolphin', 'hamster', 'kitten', 'puppy', 'lamb', 'bull', 'boar', 'hare', 'lynx', 'mule', 'ox', 'yak', 'gnu', 'ram', 'sow'];
 
-const has = (list: string[]) => (w: string) => list.includes(w.toLowerCase());
+let REAL: Record<string, Set<string>> = {};
+/** Swap in the game's real word lists (scripts/wordlists: colors, metals, animals). */
+export function useWordlists(l: Record<string, string[]>) {
+  REAL = Object.fromEntries(Object.entries(l).map(([k, v]) => [k, new Set(v)]));
+}
+const has = (list: string[]) => (w: string) => {
+  const key = list === COLORS ? 'colors' : list === METALS ? 'metals' : list === MAMMALS ? 'animals' : '';
+  return (key && REAL[key] ? REAL[key].has(w.toLowerCase()) : false) || list.includes(w.toLowerCase());
+};
 const count = (w: string, ch: string) => [...w.toLowerCase()].filter((c) => c === ch).length;
 
 export function emptyMods(): TreasureMods {

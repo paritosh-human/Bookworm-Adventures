@@ -2,10 +2,12 @@ import Phaser from 'phaser';
 import { LetterGrid, type GridTile } from '../game/LetterGrid';
 import { isValidWord } from '../game/wordValidator';
 import { getAdvProgress, newAdvProgress, setAdvProgress } from '../game/saveManager';
-import { loadPamActorAssets, pamImageTextureKey } from '../game/pam/pamLoader';
-import { PamActor } from '../game/pam/PamActor';
-import { bookNumbers, creaturePam, getBook, getChapter, getCreature, getLore, getTreasure, EFFECT_ICON } from '../game/adventures/gameData';
-import { combineTreasures } from '../game/adventures/treasures';
+import { flushLoader, loadPamActorAssets, pamImageTextureKey } from '../game/pam/pamLoader';
+import { PamActor, attackTiming } from '../game/pam/PamActor';
+import { bookNumbers, creaturePam, getBook, getChapter, getCreature, getLore, getTreasure, getDefense, getWordlist, EFFECT_ICON } from '../game/adventures/gameData';
+import { combineTreasures, useWordlists } from '../game/adventures/treasures';
+import { assetBase, curGame, keyPrefix } from '../game/adventures/gameContext';
+import { creatureCues, LEX_ATTACK_SOUND, pamSoundFile, playSfx } from '../game/adventures/sfx';
 import { TILE_HINTS } from '../game/adventures/hints';
 import { ENEMY_OFFSETS } from '../game/adventures/enemyOffsets';
 import { BattleModel, levelForXp, xpForLevel, type EnemyTurn, type TileRequest } from '../game/adventures/BattleModel';
@@ -14,7 +16,6 @@ import { letterDef } from '../game/letterTiles';
 import { makeButton } from '../game/ui';
 import type { AdvProgress } from '../game/types';
 
-const GAME = 'adventures' as const;
 
 // The original battle screen is an 800x600 layout: name bars along the top, a
 // sky "stage" for Lex and the enemy, and a bottom panel (curtains, pedestals,
@@ -75,13 +76,14 @@ export class BattleScene extends Phaser.Scene {
   private potionImgs: Partial<Record<Potion, Phaser.GameObjects.Image>> = {};
   private potionTexts: Partial<Record<Potion, Phaser.GameObjects.Text>> = {};
   private statusText!: Phaser.GameObjects.Text;
+  private enemyStatusText?: Phaser.GameObjects.Text;
 
   constructor() {
     super('Battle');
   }
 
   init() {
-    this.progress = getAdvProgress(GAME) ?? newAdvProgress();
+    this.progress = getAdvProgress(curGame()) ?? newAdvProgress();
     this.busy = false;
     this.over = false;
     this.lexHearts = [];
@@ -95,7 +97,7 @@ export class BattleScene extends Phaser.Scene {
   }
 
   private get chapter() {
-    return getChapter(GAME, this.progress.book, this.progress.chapter)!;
+    return getChapter(curGame(), this.progress.book, this.progress.chapter)!;
   }
 
   private addFrameImage(key: string, x: number, y: number, originX = 0) {
@@ -113,10 +115,11 @@ export class BattleScene extends Phaser.Scene {
     this.cameras.main.setBackgroundColor('#14100b');
     const p = this.progress;
     const ref = this.chapter.enemies[p.enemy];
-    const creature = getCreature(GAME, ref.id);
+    const creature = getCreature(curGame(), ref.id);
     if (!creature) throw new Error(`Unknown creature ${ref.id}`);
+    useWordlists({ colors: [...getWordlist(curGame(), 'colors')], metals: [...getWordlist(curGame(), 'metals')], animals: [...getWordlist(curGame(), 'animals')] });
     this.equipped = (p.treasures ?? []).slice(-3);
-    this.model = new BattleModel(creature, levelForXp(p.xp), p.hearts, Math.random, combineTreasures(this.equipped));
+    this.model = new BattleModel(creature, levelForXp(p.xp), p.hearts, Math.random, combineTreasures(this.equipped), getDefense(curGame(), creature));
 
     this.addFrameImage('battle_curtain_left', 0, 0, 1);
     this.addFrameImage('battle_curtain_right', 800, 0, 0);
@@ -137,6 +140,7 @@ export class BattleScene extends Phaser.Scene {
     // The centre scroll (blank in the art) carries the chapter title (our choice, not in the scripts).
     this.uiText(400, 16, this.chapter.title.replace(/^Chapter \d+:\s*/, ''), { fontSize: '16px', fontStyle: 'bold', color: '#3a2610' });
     this.statusText = this.uiText(135, 62, '', { fontSize: '11px', color: '#ffe28a' }).setDepth(DEPTH_UI + 2);
+    this.enemyStatusText = this.uiText(700, 64, '', { fontSize: '11px', fontStyle: 'bold', color: '#9be36b' }).setStroke('#103010', 3).setDepth(DEPTH_UI + 2);
     this.wordText = this.uiText(400, 298, '', { fontSize: '14px', fontStyle: 'bold', color: '#ffe28a' }).setVisible(false);
     this.messageText = this.uiText(400, 262, '', {
       fontSize: '14px', color: '#e6d3a8', align: 'center', wordWrap: { width: 560 },
@@ -193,6 +197,7 @@ export class BattleScene extends Phaser.Scene {
       tile.pip?.setDepth(DEPTH_UI + 1);
       tile.text.setDepth(DEPTH_UI + 1);
       tile.overlay?.setDepth(DEPTH_UI + 1.5);
+      tile.counter?.setDepth(DEPTH_UI + 2);
     }
   }
 
@@ -267,9 +272,10 @@ export class BattleScene extends Phaser.Scene {
   private showEnemyInfo() {
     const c = this.model.creature;
     const seen = new Set<string>();
-    const special = c.attacks.filter((a) => a.effects.some((e) => e.cls !== 'DamageEffect') && !seen.has(a.name) && seen.add(a.name)).slice(0, 3);
+    const special = c.attacks.filter((a) => a.effects.some((e) => e.cls !== 'DamageEffect') && !seen.has(a.name) && seen.add(a.name)).slice(0, 2);
+    const defs = (c.defenses?.list ?? []).slice(0, 2);
     const lore = getLore(c.name);
-    if (!special.length && !lore) return;
+    if (!special.length && !defs.length && !lore) return;
     this.clearInfo();
     for (const o of this.bestObjs) (o as Phaser.GameObjects.Image).setVisible(false);
     let y = 338;
@@ -277,7 +283,12 @@ export class BattleScene extends Phaser.Scene {
       this.infoObjs.push(...this.buildPlate(y, a.name, a.effects));
       y += 42;
     }
-    if (lore) {
+    for (const d of defs) {
+      // defenses use the "word effect" icon (cel 19) like the original's lore panel
+      this.infoObjs.push(...this.buildPlate(y, d.name, [{ cls: 'WordEffect', args: [] }]));
+      y += 42;
+    }
+    if (lore && y < 430) {
       const [tx, ty] = L(660, y + 6);
       this.infoObjs.push(this.add.text(tx, ty, lore, { fontFamily: 'Georgia, serif', fontSize: '10px', color: '#e6d3a8', align: 'center', wordWrap: { width: 200 } }).setOrigin(0.5, 0).setDepth(DEPTH_UI + 3));
     }
@@ -312,9 +323,13 @@ export class BattleScene extends Phaser.Scene {
     t.text.setAlpha(a);
     t.pip?.setAlpha(a);
     t.overlay?.setAlpha(a);
+    t.counter?.setAlpha(a);
   }
 
+  private lastSelCount = 0;
   private syncSelectedTiles(sel: GridTile[]) {
+    if (sel.length > this.lastSelCount) playSfx(this, 'tile_select.ogg', 0.5, true);
+    this.lastSelCount = sel.length;
     const size = 44;
     const pitch = Math.min(48, 640 / Math.max(sel.length, 1));
     for (const [tile, c] of [...this.floaters]) {
@@ -383,8 +398,9 @@ export class BattleScene extends Phaser.Scene {
 
   private buildProgress() {
     const { book, chapter } = this.progress;
-    const base = 'adventures/images/map/';
-    const keys = { col: `mm_b${book}c${chapter}`, sep: `mm_b${book}c${chapter}_s`, icons: `mmi_b${book}` };
+    const base = `${assetBase()}/images/map/`;
+    const px = keyPrefix();
+    const keys = { col: `${px}mm_b${book}c${chapter}`, sep: `${px}mm_b${book}c${chapter}_s`, icons: `${px}mmi_b${book}` };
     const build = () => {
       for (const o of this.progressObjs) o.destroy();
       this.progressObjs = [];
@@ -408,7 +424,7 @@ export class BattleScene extends Phaser.Scene {
     ];
     for (const [k, u] of want) if (!this.textures.exists(k)) { this.load.image(k, u); need++; }
     if (!this.textures.exists(keys.icons)) { this.load.spritesheet(keys.icons, `${base}minimap_icons_b${book}.png`, { frameWidth: 20, frameHeight: 20 }); need++; }
-    if (need) { this.load.once('complete', build); this.load.start(); } else build();
+    if (need) flushLoader(this).then(build); else build();
   }
 
   /** fraction of the chapter's enemies already beaten */
@@ -437,7 +453,7 @@ export class BattleScene extends Phaser.Scene {
     if (!h || this.hintOpen) return false;
     const hint = TILE_HINTS[h.kind];
     this.progress.seenHints = [...(this.progress.seenHints ?? []), h.kind];
-    setAdvProgress(GAME, this.progress);
+    setAdvProgress(curGame(), this.progress);
     this.hintOpen = true;
     this.busy = true;
     const W = 330;
@@ -498,7 +514,36 @@ export class BattleScene extends Phaser.Scene {
     return lines && lines.length ? lines[Math.floor(Math.random() * lines.length)] : undefined;
   }
 
+  /** Attack choreography from the pam's own commands: slide toward the target, play the clip, land the
+   * hit on its causeDamage frame, slide back. Returns the total ms it takes. */
+  private choreograph(actor: PamActor | undefined, label: string, after: string, onHit: () => void, onStart?: () => void): number {
+    if (!actor) {
+      onHit();
+      return 0;
+    }
+    const t = attackTiming(actor.info, label);
+    const slideMs = t.slide ? Math.min(600, (Math.abs(t.slide.dist) / t.slide.speed) * (1000 / 60)) : 0;
+    const homeX = actor.root.x;
+    const run = () => {
+      onStart?.();
+      actor.play(label, after);
+      // sounds the clip itself asks for, on their frames (impacts, bites, ...)
+      for (const snd of t.sounds) this.time.delayedCall(snd.ms, () => playSfx(this, pamSoundFile(snd.id), 0.7));
+      this.time.delayedCall(t.hitMs >= 0 ? t.hitMs : Math.min(t.animMs * 0.5, 400), onHit);
+      if (t.slide) this.time.delayedCall(t.animMs, () => this.tweens.add({ targets: actor.root, x: homeX, duration: slideMs }));
+    };
+    if (t.slide) {
+      this.tweens.add({ targets: actor.root, x: homeX + t.slide.dist * actor.root.scaleX, duration: slideMs, ease: 'Linear', onComplete: run });
+    } else run();
+    return slideMs * (t.slide ? 2 : 0) + t.animMs;
+  }
+
+  private get cues() {
+    return creatureCues(this.model.creature.id);
+  }
+
   private sayIntro() {
+    this.time.delayedCall(500, () => playSfx(this, this.cues?.engage));
     const l = this.pickLine(this.model.creature.dialog?.intro);
     if (l) this.time.delayedCall(900, () => this.say(l.speaker, l.text));
   }
@@ -515,14 +560,13 @@ export class BattleScene extends Phaser.Scene {
   // ---- asset loading ----
 
   private loadArena() {
-    const key = `arena_b${this.progress.book}c${this.progress.chapter}`;
+    const key = `${keyPrefix()}arena_b${this.progress.book}c${this.progress.chapter}`;
     const apply = () => {
       if (this.arenaBackdrop && this.textures.exists(key)) this.arenaBackdrop.setTexture(key);
     };
     if (this.textures.exists(key)) return apply();
-    this.load.image(key, `adventures/images/${key}.png`);
-    this.load.once('complete', apply);
-    this.load.start();
+    this.load.image(key, `${assetBase()}/images/${key.replace(keyPrefix(), '')}.png`);
+    flushLoader(this).then(apply);
   }
 
   private async loadLexActor() {
@@ -531,7 +575,9 @@ export class BattleScene extends Phaser.Scene {
       if (!this.sys.isActive()) return;
       // The pam is authored in stage space (800x500): draw 1:1 from the stage origin so
       // projectiles / bites travel the right distance to the enemy.
-      const [x, y] = L(-120, STAGE_Y - 10 + 330 * (ACTOR_SCALE - LEX_SCALE)); // keep his feet on the same ground line
+      // Vol. 2's Lex pam is 800x600 with his feet ~70px higher in the canvas
+      const v2 = curGame() === 'adventures2';
+      const [x, y] = v2 ? L(25, 0) : L(-120, STAGE_Y - 10 + 330 * (ACTOR_SCALE - LEX_SCALE)); // keep his feet on the same ground line
       this.lexActor = new PamActor(this, x, y, pam, this.lexIdle(), pamImageTextureKey, { fit: false });
       this.lexActor.root.setScale(LEX_SCALE);
       this.lexActor.root.setDepth(DEPTH_ACTORS);
@@ -562,15 +608,41 @@ export class BattleScene extends Phaser.Scene {
     }
   }
 
+  /** Every enemy .pam is authored in its own spot, so place each one like the first enemy of the
+   * first game (Trojan Spearman, which looks right): same centre x and same ground line. Oversized
+   * enemies are shrunk to fit the arena first. Layout px: centre x 650, feet y 275. */
+  private fitEnemyToArena(root: Phaser.GameObjects.Container, offsetX: number) {
+    const REF = { cx: 650, bottom: 275 };
+    const area = { l: 300, r: 795, t: 58 };
+    const bounds = () => {
+      const r = root.getBounds();
+      return { l: r.x - OX - offsetX, r: r.right - OX - offsetX, t: r.y - OY, b: r.bottom - OY, w: r.width, h: r.height };
+    };
+    let b = bounds();
+    if (b.w <= 0 || b.h <= 0) return;
+    const k = Math.min(1, (area.r - area.l) / b.w, (REF.bottom - area.t) / b.h);
+    if (k < 1) {
+      root.setScale(root.scaleX * k);
+      b = bounds();
+    }
+    let dx = REF.cx - (b.l + b.r) / 2;
+    if (b.r + dx > area.r) dx = area.r - b.r;
+    if (b.l + dx < area.l) dx = area.l - b.l;
+    root.x += dx;
+    root.y += REF.bottom - b.b;
+  }
+
   private async loadMonsterActor(stem: string, offsetX = 0) {
     try {
       const pam = await loadPamActorAssets(this, stem);
       if (!this.sys.isActive()) return;
       // Enemy pams are authored right-aligned on the 800px stage (a 400px pam sits at x=400).
-      const [x, y] = L(800 - (pam.size?.[0] ?? 400) * ACTOR_SCALE + 200 + offsetX + (ENEMY_OFFSETS[stem]?.x ?? 0), STAGE_Y - 45 + (ENEMY_OFFSETS[stem]?.y ?? 0));
+      const v2 = curGame() === 'adventures2';
+      const [x, y] = L(800 - (pam.size?.[0] ?? 400) * ACTOR_SCALE + (v2 ? -45 : 200) + offsetX + (ENEMY_OFFSETS[stem]?.x ?? 0), (v2 ? -41 : STAGE_Y - 45) + (ENEMY_OFFSETS[stem]?.y ?? 0));
       this.monsterActor = new PamActor(this, x, y, pam, 'idle', pamImageTextureKey, { fit: false });
       this.monsterActor.root.setScale(ACTOR_SCALE);
       this.monsterActor.root.setDepth(DEPTH_ACTORS);
+      this.fitEnemyToArena(this.monsterActor.root, offsetX);
     } catch (err) {
       console.warn(`Failed to load enemy art "${stem}":`, err);
     }
@@ -603,6 +675,13 @@ export class BattleScene extends Phaser.Scene {
     }
   }
 
+  /** Status line under the enemy's hearts: poison / burn turns left, frozen. */
+  private refreshEnemyStatus() {
+    const es = this.model.enemyAilments.map((a) => `${a.kind === 'poison' ? 'Poisoned' : 'Burning'} ${a.turns}`);
+    if (this.model.enemySkips) es.push('Frozen');
+    this.enemyStatusText?.setText(es.join(' · '));
+  }
+
   private refreshHearts() {
     this.drawHearts(this.lexHearts, this.model.lex, this.model.lexMax, 14, 38, 'left');
     this.drawHearts(this.enemyHearts, this.model.enemy, this.model.enemyMax, 786, 38, 'right');
@@ -611,6 +690,7 @@ export class BattleScene extends Phaser.Scene {
     for (const a of this.model.ailments) s.push(`${a.kind === 'cut' ? 'Cut' : a.kind === 'fire' ? 'Burning' : 'Poisoned'} ${a.turns}`);
     if (this.model.lexMults.some((m) => m.mult < 1)) s.push('Weakened');
     this.statusText.setText(s.join(' · '));
+    this.refreshEnemyStatus();
   }
 
   // ---- turn flow ----
@@ -619,7 +699,9 @@ export class BattleScene extends Phaser.Scene {
     return tiles.reduce((s, t) => s + (t.gem ? GEM_BONUS_PCT[t.gem] ?? 0 : 0), 0);
   }
 
+  private gemNotes: string[] = [];
   private applyGemEffects(tiles: GridTile[]) {
+    this.gemNotes = [];
     for (const t of tiles) {
       switch (t.gem) {
         case 'emerald': this.model.heal(2); break;
@@ -628,9 +710,18 @@ export class BattleScene extends Phaser.Scene {
           for (const k of ['health', 'attack', 'purify'] as const) this.addPotion(k);
           break;
         case 'crystal': this.model.purifyLex(); this.grid.clearStatuses(); this.model.lexInvincible = 1; break;
-        case 'ruby': this.model.enemyAilments.push({ kind: 'burn', dmg: 0.5, turns: 3 }); break; // APPROX numbers
-        case 'amethyst': this.model.enemyAilments.push({ kind: 'poison', dmg: 0.25, turns: 4 }); break;
-        case 'saphire': this.model.enemySkips = true; break;
+        case 'ruby':
+          if (this.model.defense.immune.has('fire')) this.gemNotes.push('enemy is immune to fire');
+          else { this.model.enemyAilments.push({ kind: 'burn', dmg: 0.5, turns: 3 }); this.gemNotes.push('enemy is burning'); }
+          break; // APPROX numbers
+        case 'amethyst':
+          if (this.model.defense.immune.has('poison')) this.gemNotes.push('enemy is immune to poison');
+          else { this.model.enemyAilments.push({ kind: 'poison', dmg: 0.25, turns: 4 }); this.gemNotes.push('enemy is poisoned'); }
+          break;
+        case 'saphire':
+          if (this.model.defense.immune.has('freeze')) this.gemNotes.push('enemy is immune to freeze');
+          else { this.model.enemySkips = true; this.gemNotes.push('enemy is frozen'); }
+          break;
         case 'garnet': this.model.enemyMults.push({ mult: 0.5, turns: 2 }); break;
         default: break;
       }
@@ -658,21 +749,34 @@ export class BattleScene extends Phaser.Scene {
     this.recordBestWord(word, damage);
     this.consumeFloaters();
     this.applyGemEffects(tiles);
+    this.refreshEnemyStatus();
     if (this.model.lastWordPurify) this.grid.clearStatuses();
     this.grid.replaceTiles(tiles);
     this.spawnGem(word.length, tiles);
     this.raiseGridTiles();
+    const note = this.model.lastWordNote === 'immune' ? ' · IMMUNE!' : this.model.lastWordNote === 'bonus' ? ' · BONUS WORD!' : '';
     const extra = this.model.lastWordHeal ? ` · heals ${this.model.lastWordHeal}` : '';
-    this.setMessage(`"${word.toUpperCase()}" hits for ${damage} ${damage === 1 ? 'heart' : 'hearts'}!${extra}`, '#9fd3c7');
-    this.lexActor?.play(lexAttackFrame(word), this.lexIdle());
-    this.monsterActor?.play('flinch', 'idle');
-    this.refreshHearts();
+    this.setMessage(`"${word.toUpperCase()}" hits for ${damage} ${damage === 1 ? 'heart' : 'hearts'}!${extra}${note}${this.gemNotes.length ? ` · ${this.gemNotes.join(', ')}` : ''}`, '#9fd3c7');
+    const lexFrame = lexAttackFrame(word);
+    const lexMs = this.choreograph(
+      this.lexActor, lexFrame, this.lexIdle(),
+      () => {
+        playSfx(this, LEX_ATTACK_SOUND[lexFrame], 0.7, true); // lands with the hit
+        this.monsterActor?.play('flinch', 'idle');
+        this.refreshHearts();
+        playSfx(this, this.cues?.hit);
+      },
+    );
+    if (Math.random() < 0.35) {
+      const ll = this.pickLine(this.model.creature.dialog?.attack.filter((d) => d.attacker === 'lex'));
+      if (ll) this.time.delayedCall(600, () => this.say(ll.speaker, ll.text));
+    }
 
     if (this.model.enemyDead) {
-      this.time.delayedCall(700, () => this.handleVictory());
+      this.time.delayedCall(Math.max(700, lexMs + 300), () => this.handleVictory());
       return;
     }
-    this.time.delayedCall(1100, () => this.runEnemyTurn());
+    this.time.delayedCall(Math.max(1100, lexMs + 300), () => this.runEnemyTurn());
   }
 
   private spawnGem(len: number, replaced: GridTile[]) {
@@ -682,6 +786,7 @@ export class BattleScene extends Phaser.Scene {
     if (candidates.length) {
       this.grid.setGem(pick(replaced.filter((t) => !t.status).concat(candidates)), gem);
       this.queueHint(gem);
+      playSfx(this, 'gemspawn.ogg', 0.7, true);
     }
   }
 
@@ -704,37 +809,45 @@ export class BattleScene extends Phaser.Scene {
       this.handleVictory();
       return;
     }
-    this.showEnemyTurn(turn);
+    if (turn.enemyAilmentDamage > 0) this.floatText(`-${turn.enemyAilmentDamage}`, this.model.enemyAilments.some((a) => a.kind === 'burn') ? '#ff9a3c' : '#9be36b');
     this.refreshHearts();
+    this.showEnemyTurn(turn);
     if (turn.attackName) this.showAttackInfo(turn.attackName, turn.description);
-    this.monsterActor?.play(turn.attackFrame, 'idle');
+    // the enemy walks up, hits on its causeDamage frame and walks back; hearts / tiles update on the hit
+    const onHit = () => {
+      if (turn.attackName) playSfx(this, this.cues?.attacks[turn.attackName]); // lands with the hit
+      this.refreshHearts();
+      if (turn.damage > 0 || turn.ailmentDamage > 0) this.lexActor?.play('flinch', this.lexIdle());
+      this.applyTileRequests(turn.tiles);
+      this.grid.tickStatuses();
+      this.spreadPlague();
+      this.raiseGridTiles();
+    };
+    const enemyMs = turn.attackName
+      ? this.choreograph(this.monsterActor, turn.attackFrame, 'idle', onHit)
+      : (onHit(), 0);
     if (turn.attackName && Math.random() < 0.5) {
       const classes = this.model.creature.attacks.find((a) => a.name === turn.attackName)?.effects.map((e) => e.cls) ?? [];
       const pool = this.model.creature.dialog?.attack.filter((d) => d.attacker === 'enemy' && classes.includes(d.effect));
       const l = this.pickLine(pool?.length ? pool : this.model.creature.dialog?.attack.filter((d) => d.attacker === 'enemy'));
       if (l) this.time.delayedCall(500, () => this.say(l.speaker, l.text));
     }
-    if (turn.damage > 0 || turn.ailmentDamage > 0) {
-      this.time.delayedCall(450, () => this.lexActor?.play('flinch', this.lexIdle()));
-    }
-    this.applyTileRequests(turn.tiles);
-    this.grid.tickStatuses();
-    this.spreadPlague();
-    this.raiseGridTiles();
 
     if (turn.lexDead) {
-      this.time.delayedCall(900, () => this.handleDefeat());
+      this.time.delayedCall(Math.max(900, enemyMs + 300), () => this.handleDefeat());
       return;
     }
     if (this.model.stunTurns > 0) {
       // Stunned: the player's turn is skipped and the enemy goes again.
       this.model.stunTurns--;
-      this.refreshHearts();
       this.setMessage('Lex is stunned — turn skipped!', '#ff8a7a');
-      this.time.delayedCall(1500, () => this.runEnemyTurn());
+      this.time.delayedCall(Math.max(1500, enemyMs + 900), () => {
+        this.refreshHearts();
+        this.runEnemyTurn();
+      });
       return;
     }
-    this.time.delayedCall(700, () => {
+    this.time.delayedCall(Math.max(700, enemyMs + 300), () => {
       if (this.showNextHint()) return;
       this.busy = false;
       this.setButtonEnabled(this.attackBtn, true);
@@ -744,6 +857,7 @@ export class BattleScene extends Phaser.Scene {
 
   private showEnemyTurn(t: EnemyTurn) {
     const parts: string[] = [];
+    if (t.enemyAilmentDamage) parts.push(`${this.model.creature.name} suffers ${t.enemyAilmentDamage} from its ailment`);
     if (t.skipped) parts.push(`${this.model.creature.name} is stunned and loses its turn`);
     if (t.attackName) parts.push(`${this.model.creature.name} uses ${t.attackName}`);
     if (t.resisted.length) parts.push(`Lex resists ${[...new Set(t.resisted)].join(', ')}`);
@@ -754,6 +868,13 @@ export class BattleScene extends Phaser.Scene {
     if (t.weakened) parts.push('Lex is weakened');
     if (t.boosted) parts.push('enemy powered up');
     this.setMessage(parts.join(' · ') || `${this.model.creature.name} hesitates`, '#ffb199');
+  }
+
+  /** A damage number that floats up from the enemy (poison / burn ticks). */
+  private floatText(text: string, color: string) {
+    const [x, y] = L(650, 150);
+    const t = this.add.text(x, y, text, { fontFamily: 'Georgia, serif', fontSize: '26px', fontStyle: 'bold', color }).setOrigin(0.5).setStroke('#102010', 5).setDepth(DEPTH_BANNER);
+    this.tweens.add({ targets: t, y: y - 50, alpha: 0, duration: 1400, onComplete: () => t.destroy() });
   }
 
   private usableTiles() {
@@ -860,7 +981,7 @@ export class BattleScene extends Phaser.Scene {
     }
     if (kind === 'purify') this.grid.clearStatuses();
     potions[kind] -= 1;
-    setAdvProgress(GAME, this.progress);
+    setAdvProgress(curGame(), this.progress);
     this.refreshPotions();
     this.refreshHearts();
     this.setMessage(POTION_USED[kind], '#9fd3c7');
@@ -870,31 +991,42 @@ export class BattleScene extends Phaser.Scene {
   private buildTreasures() {
     // three domes under the potions: slot centres at x = 55 / 145 / 235
     this.equipped.forEach((id, i) => {
-      const t = getTreasure(GAME, id);
+      const t = getTreasure(curGame(), id);
       if (!t) return;
       const cx = 55 + i * 90;
       const [px, py] = L(cx - 35, 365);
       if (this.textures.exists('ui_treasure_pedestal')) this.add.image(px, py, 'ui_treasure_pedestal').setOrigin(0, 0).setDepth(DEPTH_UI);
-      const key = `treasure_${t.book}-${t.number}`;
-      if (this.textures.exists(key)) {
+      this.withTreasureTexture(t, (key) => {
         const [ix, iy] = L(cx, 392);
         this.add.image(ix, iy, key).setOrigin(0.5, 0).setDepth(DEPTH_UI + 1);
-      }
+      });
       const name = this.uiText(cx, 500, t.name, { fontSize: '10px', color: '#f2e6c9', align: 'center', wordWrap: { width: 84 } }).setOrigin(0.5, 0).setDepth(DEPTH_UI + 1);
       const info = name.setInteractive({ useHandCursor: true }).on('pointerover', () => this.setMessage(`${t.name}: ${t.lore}`, '#ffe28a'));
+      const more = this.uiText(cx, 520, '(more info)', { fontSize: '10px', color: '#ff6a4d' }).setDepth(DEPTH_UI + 1).setInteractive({ useHandCursor: true });
+      more.on('pointerdown', () => this.showTreasureAward(id, 'Treasure'));
     });
   }
 
-  private showTreasureAward(id: string) {
-    const t = getTreasure(GAME, id);
+  /** Treasure icons: Vol. 1's are preloaded; Vol. 2's load on demand under a prefixed key. */
+  private withTreasureTexture(t: { book: number; number: number }, cb: (key: string) => void) {
+    const key = `${keyPrefix()}treasure_${t.book}-${t.number}`;
+    if (this.textures.exists(key)) return cb(key);
+    this.load.image(key, `${assetBase()}/images/treasure_${t.book}-${t.number}.png`);
+    flushLoader(this).then(() => { if (this.sys.isActive() && this.textures.exists(key)) cb(key); });
+  }
+
+  private showTreasureAward(id: string, heading = 'New treasure') {
+    const t = getTreasure(curGame(), id);
     if (!t) return;
-    const key = `treasure_${t.book}-${t.number}`;
     const [cx, cy] = L(400, 170);
     const box = this.add.rectangle(cx, cy, 420, 150, 0x000000, 0.75).setStrokeStyle(2, 0xd4af37).setDepth(DEPTH_BANNER);
     const parts: Phaser.GameObjects.GameObject[] = [box];
-    if (this.textures.exists(key)) parts.push(this.add.image(cx - 170, cy, key).setDepth(DEPTH_BANNER + 1).setScale(1.4));
+    this.withTreasureTexture(t, (key) => {
+      const icon = this.add.image(cx - 170, cy, key).setDepth(DEPTH_BANNER + 1).setScale(1.4);
+      this.tweens.add({ targets: icon, alpha: 0, delay: 3600, duration: 600, onComplete: () => icon.destroy() });
+    });
     parts.push(
-      this.add.text(cx + 20, cy - 40, `New treasure: ${t.name}`, { fontFamily: 'Georgia, serif', fontSize: '17px', fontStyle: 'bold', color: '#ffe28a', wordWrap: { width: 300 } }).setOrigin(0.5, 0).setDepth(DEPTH_BANNER + 1),
+      this.add.text(cx + 20, cy - 40, `${heading}: ${t.name}`, { fontFamily: 'Georgia, serif', fontSize: '17px', fontStyle: 'bold', color: '#ffe28a', wordWrap: { width: 300 } }).setOrigin(0.5, 0).setDepth(DEPTH_BANNER + 1),
       this.add.text(cx + 20, cy, t.lore, { fontFamily: 'Georgia, serif', fontSize: '13px', color: '#e6d3a8', wordWrap: { width: 300 } }).setOrigin(0.5, 0).setDepth(DEPTH_BANNER + 1),
     );
     if (this.cache.audio.exists('newtreasure')) this.sound.play('newtreasure');
@@ -905,7 +1037,7 @@ export class BattleScene extends Phaser.Scene {
   private async advanceEnemy() {
     const p = this.progress;
     const ref = this.chapter.enemies[p.enemy];
-    const creature = getCreature(GAME, ref.id);
+    const creature = getCreature(curGame(), ref.id);
     if (!creature) return;
     this.attackBtn.setVisible(true);
     this.setButtonEnabled(this.attackBtn, false);
@@ -915,7 +1047,7 @@ export class BattleScene extends Phaser.Scene {
     this.bubbles.enemy?.destroy();
     this.monsterActor?.destroy();
     this.monsterActor = undefined;
-    this.model = new BattleModel(creature, levelForXp(p.xp), p.hearts, Math.random, combineTreasures(this.equipped));
+    this.model = new BattleModel(creature, levelForXp(p.xp), p.hearts, Math.random, combineTreasures(this.equipped), getDefense(curGame(), creature));
     this.nameText.setText(creature.name).setScale(1);
     if (this.nameText.width > 78) this.nameText.setScale(78 / this.nameText.width);
     this.showAttackInfo(null);
@@ -957,8 +1089,7 @@ export class BattleScene extends Phaser.Scene {
     const ref = this.chapter.enemies[p.enemy];
     if (this.cache.audio.exists('crowdcheer')) this.sound.play('crowdcheer');
     this.monsterActor?.play('death', '');
-    const dl = this.pickLine(creature.dialog?.death);
-    if (dl) this.say(dl.speaker, dl.text, 2200);
+    playSfx(this, this.cues?.death);
 
     const levelBefore = levelForXp(p.xp);
     p.xp += creature.xp ?? 0;
@@ -969,7 +1100,7 @@ export class BattleScene extends Phaser.Scene {
     const drop = rollPotion(this.model.mods.potionDropBonus);
     if (drop) this.addPotion(drop);
     const tid = creature.treasure;
-    const newTreasure = tid && !(p.treasures ?? []).includes(tid) && getTreasure(GAME, tid) ? tid : null;
+    const newTreasure = tid && !(p.treasures ?? []).includes(tid) && getTreasure(curGame(), tid) ? tid : null;
     if (newTreasure) p.treasures = [...(p.treasures ?? []), newTreasure];
 
     const nextEnemy = p.enemy + 1;
@@ -995,13 +1126,13 @@ export class BattleScene extends Phaser.Scene {
       p.hearts = undefined;
       p.enemy = 0;
       p.checkpoint = 0;
-      const nextChapter = getChapter(GAME, p.book, p.chapter + 1);
+      const nextChapter = getChapter(curGame(), p.book, p.chapter + 1);
       if (nextChapter) p.chapter += 1;
       else {
-        const nextBook = bookNumbers(GAME).find((b) => b > p.book);
+        const nextBook = bookNumbers(curGame()).find((b) => b > p.book);
         if (nextBook !== undefined) {
           p.book = nextBook;
-          p.chapter = getBook(GAME, nextBook)!.chapters[0].n;
+          p.chapter = getBook(curGame(), nextBook)!.chapters[0].n;
         } else label = 'Adventure Complete!';
       }
       if (label !== 'Adventure Complete!') label = 'Next Chapter';
@@ -1009,7 +1140,7 @@ export class BattleScene extends Phaser.Scene {
       p.enemy = nextEnemy;
     }
     this.updateProgress();
-    setAdvProgress(GAME, p);
+    setAdvProgress(curGame(), p);
 
     this.time.delayedCall(1400, () =>
       this.showContinue(label, () => {
@@ -1037,10 +1168,13 @@ export class BattleScene extends Phaser.Scene {
     this.over = true;
     const p = this.progress;
     this.lexActor?.play('death', '');
+    // the scripts' "death" lines are said when LEX falls ("Beaten? By this guy?" / the enemy gloating)
+    const dl = this.pickLine(this.model.creature.dialog?.death);
+    if (dl) this.say(dl.speaker, dl.text, 2600);
     this.setMessage('Lex has fallen! Retry from the last checkpoint.', '#ff8a7a');
     p.enemy = p.checkpoint;
     p.hearts = undefined;
-    setAdvProgress(GAME, p);
+    setAdvProgress(curGame(), p);
     this.time.delayedCall(1400, () => this.showContinue('Retry', () => this.scene.restart()));
   }
 }

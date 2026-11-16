@@ -3,20 +3,25 @@
 
 Chapter icons are animation strips (N cols); we keep frame 0. Needs Pillow.
 """
+import json
 import re
+import sys
 from pathlib import Path
 
 from PIL import Image
 
 ROOT = Path(__file__).resolve().parent.parent
-RAW = ROOT / "raw-assets/adventures"
-OUT = ROOT / "public/adventures/images/map"
+# Usage: prepare_map_assets.py [GAME]   (adventures | adventures-vol2, default adventures)
+GAME = sys.argv[1] if len(sys.argv) > 1 else "adventures"
+GAME_DATA = {"adventures": "game_data.json", "adventures-vol2": "game_data_vol2.json"}[GAME]
+RAW = ROOT / "raw-assets" / GAME
+OUT = ROOT / "public" / GAME / "images/map"
 OUT.mkdir(parents=True, exist_ok=True)
 
 
 def find(parent: Path, stem: str) -> Path | None:
     for f in parent.iterdir():
-        if f.stem.lower() == stem.lower() and f.suffix.lower() in (".jpg", ".gif", ".png"):
+        if f.stem.lower() == stem.lower() and f.suffix.lower() in (".jpg", ".gif", ".png", ".jp2"):
             return f
     return None
 
@@ -45,12 +50,14 @@ def main():
         comp(img, f"sharedui_{name}", f"ui_{name}.png")
     comp(img, "checkmark", "checkmark.png")
     comp(img / "books", "button_continue", "btn_continue.png")
-    for b in (1, 2, 3):
+    books = json.loads((ROOT / "src/assets/adventures" / GAME_DATA).read_text())["books"]
+    for b in map(int, books):
         d = img / "books" / f"book{b}"
         xml = (RAW / "properties" / f"Book{b}.xml").read_text()
         comp(d, "map", f"map_b{b}.png")
         comp(d, "mapscreen_banner", f"banner_b{b}.png")
-        comp(d, "minimap_icons" if b != 2 else "minimap_icons-2", f"minimap_icons_b{b}.png")
+        # adventures book 2 ships "minimap_icons-2"; vol2 books all use plain "minimap_icons"
+        comp(d, "minimap_icons" if find(d, "minimap_icons") else f"minimap_icons-{b}", f"minimap_icons_b{b}.png")
         for n in range(1, 11):
             mm = comp(d, f"minimap_{b}-{n}", f"minimap_b{b}c{n}.png")
             if mm is not None:  # greyscale/sepia twin: the not-yet-beaten part of the strip

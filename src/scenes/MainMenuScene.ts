@@ -2,6 +2,8 @@ import Phaser from 'phaser';
 import { makeButton } from '../game/ui';
 import { clearAdvProgress, getAdvProgress, loadSave, newAdvProgress, setAdvProgress } from '../game/saveManager';
 import { playCutscene } from '../game/cutscene';
+import { bookNumbers, getBook, type GameId } from '../game/adventures/gameData';
+import { setGame } from '../game/adventures/gameContext';
 
 export class MainMenuScene extends Phaser.Scene {
   constructor() {
@@ -31,26 +33,35 @@ export class MainMenuScene extends Phaser.Scene {
       this.scene.start('Deluxe');
     });
 
-    const saved = getAdvProgress('adventures');
-    const startNew = () => {
-      clearAdvProgress('adventures');
-      setAdvProgress('adventures', newAdvProgress());
-      playCutscene('/adventures/cutscenes/intro.swf', 21).then(() => this.scene.start('ChapterIntro'));
+    const entry = (game: GameId, label: string, y: number, intro: string) => {
+      const saved = getAdvProgress(game);
+      const startNew = () => {
+        setGame(game);
+        const first = bookNumbers(game)[0];
+        clearAdvProgress(game);
+        setAdvProgress(game, { ...newAdvProgress(), book: first, chapter: getBook(game, first)!.chapters[0].n });
+        playCutscene(intro, 21).then(() => this.scene.start('ChapterIntro'));
+      };
+      if (saved) {
+        makeButton(this, width / 2 - 60, y, 270, 50, `Continue · Book ${saved.book} Ch. ${saved.chapter} · match ${saved.enemy + 1}`, () => {
+          setGame(game);
+          this.scene.start('Battle'); // straight back into the match you left
+        });
+        makeButton(this, width / 2 + 145, y, 100, 50, 'New Game', () => {
+          // keeps your history: pick any chapter you have completed (or the next one) on the map
+          setGame(game);
+          this.scene.start('ChapterIntro', { book: saved.book, chapter: saved.chapter });
+        });
+      } else {
+        makeButton(this, width / 2, y, 340, 50, label, startNew);
+      }
     };
-    if (saved) {
-      makeButton(this, width / 2, 270, 340, 56, `Continue Adventures (Book ${saved.book}, Ch. ${saved.chapter})`, () => this.scene.start('ChapterIntro'));
-      makeButton(this, width / 2, 340, 340, 44, 'New Adventure', startNew);
-    } else {
-      makeButton(this, width / 2, 270, 340, 56, 'Bookworm Adventures', startNew);
-    }
+    entry('adventures', 'Bookworm Adventures', 270, '/adventures/cutscenes/intro.swf');
+    entry('adventures2', 'Adventures Volume 2', 340, '/adventures-vol2/cutscenes/intro.swf');
 
-    const vol2 = makeButton(this, width / 2, saved ? 400 : 340, 340, 56, 'Bookworm Adventures Volume 2', () => {
-      vol2.text.setText('Volume 2: data decoded, gameplay not built yet');
-      vol2.text.setFontSize('13px');
-    });
-
+    makeButton(this, width / 2, 410, 200, 40, 'Settings', () => this.scene.start('Settings'));
     this.add
-      .text(width / 2, 480, `Deluxe high score: ${save.deluxeHighScore}`, {
+      .text(width / 2, 470, `Deluxe high score: ${save.deluxeHighScore}`, {
         fontFamily: 'Georgia, serif',
         fontSize: '14px',
         color: '#a08a5f',

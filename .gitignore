@@ -4,3 +4,5 @@ dist
 *.log
 raw-assets/
 /tmp/
+public/adventures-vol2/
+public/adventures/sounds/

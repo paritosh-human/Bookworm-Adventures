@@ -28,6 +28,7 @@ export interface CreatureDef {
   attacks: AttackDef[];
   defense: string | null;
   book: number;
+  defenses?: { list: { name: string; description: string }[]; bonusMult: number };
   dialog?: {
     intro: { text: string; speaker: 'lex' | 'enemy' }[];
     attack: { text: string; speaker: 'lex' | 'enemy'; attacker: string; effect: string }[];
@@ -71,4 +72,5 @@ export interface GameData {
   books: Record<string, BookDef>;
   creatures: Record<string, CreatureDef>;
   treasures: Record<string, TreasureDef>;
+  wordlists: Record<string, string[]>;
 }

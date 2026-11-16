@@ -55,5 +55,14 @@ export const EFFECT_ICON: Record<string, number> = {
   DamageEffect: -1, DamageAilment: 2, PoisonAilment: 1, FireAilment: 0, StunEffect: 4, FreezeEffect: 5,
   PetrifyEffect: 6, DestroyedTileEffect: 10, LockTileEffect: 11, PoisonTileEffect: 12, HealEffect: 15,
   PurifyEffect: 15, StealTileEffect: 16, VowelToConsonantEffect: 17,
-  DamageMultiplierEffect: 3, // APPROX: 3 = weaken / 7 = boost (cels not named in the scripts)
+  WordEffect: 19, DamageMultiplierEffect: 3, // APPROX: 3 = weaken / 7 = boost (cels not named in the scripts)
 };
+
+import { buildDefense, type DefenseProfile } from './defenses';
+export function getDefense(game: GameId, c: CreatureDef): DefenseProfile {
+  return buildDefense(c, DATA[game].wordlists ?? {});
+}
+/** Treasure bonus word lists (mammals, colors, metals) from scripts/wordlists. */
+export function getWordlist(game: GameId, name: string): Set<string> {
+  return new Set(DATA[game].wordlists?.[name] ?? []);
+}

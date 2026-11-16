@@ -4,6 +4,7 @@
 import type { CreatureDef, EffectDef } from './types.ts';
 import { chooseAttack, newAttackStates, wordDamage, POTION_ATTACK_MULT, POTION_HEAL, type AttackState, type Potion } from './rules.ts';
 import { emptyMods, type TreasureMods } from './treasures.ts';
+import { emptyDefense, type DefenseProfile } from './defenses.ts';
 
 export interface Ailment {
   kind: 'cut' | 'poison' | 'fire';
@@ -37,6 +38,8 @@ export interface EnemyTurn {
   skipped: boolean;
   /** Lex's treasures resisted part of the attack */
   resisted: string[];
+  /** hearts the enemy lost to burn / poison at the start of its turn */
+  enemyAilmentDamage: number;
 }
 
 export const LEX_BASE_HEARTS = 3;
@@ -86,11 +89,15 @@ export class BattleModel {
   /** hearts Lex healed by the last word (Tablet of the Ages) */
   lastWordHeal = 0;
   lastWordPurify = false;
+  readonly defense: DefenseProfile;
+  /** 'immune' | 'bonus' | '' describing how the enemy's defenses changed the last word */
+  lastWordNote = '';
 
   readonly creature: CreatureDef;
   private rand: () => number;
 
-  constructor(creature: CreatureDef, level = 1, lexHearts?: number, rand: () => number = Math.random, mods: TreasureMods = emptyMods()) {
+  constructor(creature: CreatureDef, level = 1, lexHearts?: number, rand: () => number = Math.random, mods: TreasureMods = emptyMods(), defense: DefenseProfile = emptyDefense()) {
+    this.defense = defense;
     this.creature = creature;
     this.rand = rand;
     this.mods = mods;
@@ -113,8 +120,17 @@ export class BattleModel {
       for (const e of this.lexMults) e.turns--;
       this.lexMults = this.lexMults.filter((e) => e.turns > 0);
     }
+    this.lastWordNote = '';
     let dmg = wordDamage(word, gemPct + this.mods.gemBonusAdd * (gemPct > 0 ? 1 : 0), this.bonus.attack, out);
     if (dmg > 0) dmg = floorQ(dmg + (this.mods.flatDamage + this.mods.wordBonus(word)) * out);
+    if (dmg > 0) {
+      if (this.defense.immuneLengths.includes(word.length)) { dmg = 0; this.lastWordNote = 'immune'; }
+      else {
+        const b = this.defense.bonus.find((x) => x.words.has(word.toLowerCase()));
+        if (b) { dmg *= b.mult; this.lastWordNote = 'bonus'; }
+        dmg = Math.max(0.25, floorQ(dmg * this.defense.resist));
+      }
+    }
     this.enemy = Math.max(0, this.enemy - dmg);
     this.lastWordHeal = this.mods.wordHeal(word);
     if (this.lastWordHeal) this.heal(this.lastWordHeal);
@@ -155,15 +171,16 @@ export class BattleModel {
   enemyTurn(): EnemyTurn {
     this.turn++;
     for (const s of this.attacks) s.counter++;
-    for (const a of this.enemyAilments) { this.enemy = Math.max(0, this.enemy - a.dmg); a.turns--; }
+    let enemyAilmentDamage = 0;
+    for (const a of this.enemyAilments) { this.enemy = Math.max(0, this.enemy - a.dmg); enemyAilmentDamage += a.dmg; a.turns--; }
     this.enemyAilments = this.enemyAilments.filter((a) => a.turns > 0);
-    if (this.enemy <= 0) return { attackName: '', attackFrame: 'idle', description: '', damage: 0, healed: 0, stunned: false, newAilments: [], tiles: [], ailmentDamage: 0, weakened: false, boosted: false, lexDead: false, skipped: true, resisted: [] };
+    if (this.enemy <= 0) return { attackName: '', attackFrame: 'idle', description: '', damage: 0, healed: 0, stunned: false, newAilments: [], tiles: [], ailmentDamage: 0, weakened: false, boosted: false, lexDead: false, skipped: true, resisted: [], enemyAilmentDamage };
     const skipped = this.enemySkips;
     this.enemySkips = false;
     const pick = skipped ? null : chooseAttack(this.attacks, this.rand);
     const result: EnemyTurn = {
       attackName: '', attackFrame: 'attack1', description: '', damage: 0, healed: 0, stunned: false,
-      newAilments: [], tiles: [], ailmentDamage: 0, weakened: false, boosted: false, lexDead: false, skipped, resisted: [],
+      newAilments: [], tiles: [], ailmentDamage: 0, weakened: false, boosted: false, lexDead: false, skipped, resisted: [], enemyAilmentDamage,
     };
     if (pick) {
       const def = pick.def;

@@ -5,13 +5,17 @@ Needs Pillow (see scripts/composite_pam_images.py for the venv used here).
 Reads src/assets/adventures/game_data.json for the per-chapter arena paths.
 """
 import json
+import sys
 from pathlib import Path
 
 from PIL import Image
 
 ROOT = Path(__file__).resolve().parent.parent
-RAW = ROOT / "raw-assets/adventures"
-OUT = ROOT / "public/adventures/images"
+# Usage: prepare_adventures_assets.py [GAME]   (adventures | adventures-vol2, default adventures)
+GAME = sys.argv[1] if len(sys.argv) > 1 else "adventures"
+GAME_DATA = {"adventures": "game_data.json", "adventures-vol2": "game_data_vol2.json"}[GAME]
+RAW = ROOT / "raw-assets" / GAME
+OUT = ROOT / "public" / GAME / "images"
 
 
 def find(rel_no_ext: str) -> Path | None:
@@ -45,7 +49,7 @@ def composite(rel_no_ext: str, out_name: str) -> bool:
 
 
 def main():
-    data = json.loads((ROOT / "src/assets/adventures/game_data.json").read_text())
+    data = json.loads((ROOT / "src/assets/adventures" / GAME_DATA).read_text())
     n = 0
     for book, bk in data["books"].items():
         for ch in bk["chapters"]:
@@ -63,7 +67,7 @@ def main():
         ("images/board/bossbattle_text", "boss_text.png"),
         ("images/board/checkpointreached", "checkpoint_reached.png"),
         *[(f"images/items/item_{k}{nb}", f"item_{k}{nb}.png") for k in ("health", "attack", "purify") for nb in ("", "_nobubble")],
-        *[(f"images/treasures/treasure_{b}-{n}_sml", f"treasure_{b}-{n}.png") for b in (1, 2, 3) for n in range(1, 11)],
+        *[(f"images/treasures/treasure_{b}-{n}_sml", f"treasure_{b}-{n}.png") for b in data["books"] for n in range(1, 11)],
         ("images/treasures/TreasureBox", "treasure_box.png"),
         ("images/wordscroll/bestword_paper", "bestword_paper.png"),
         ("images/wordscroll/bestword_title", "bestword_title.png"),
