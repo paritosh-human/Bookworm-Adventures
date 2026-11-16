@@ -4,11 +4,11 @@ import { isValidWord } from '../game/wordValidator';
 import { getAdvProgress, newAdvProgress, setAdvProgress } from '../game/saveManager';
 import { loadPamActorAssets, pamImageTextureKey } from '../game/pam/pamLoader';
 import { PamActor } from '../game/pam/PamActor';
-import { bookNumbers, creaturePam, getBook, getChapter, getCreature, getTreasure } from '../game/adventures/gameData';
+import { bookNumbers, creaturePam, getBook, getChapter, getCreature, getLore, getTreasure, EFFECT_ICON } from '../game/adventures/gameData';
 import { combineTreasures } from '../game/adventures/treasures';
 import { TILE_HINTS } from '../game/adventures/hints';
 import { ENEMY_OFFSETS } from '../game/adventures/enemyOffsets';
-import { BattleModel, levelForXp, type EnemyTurn, type TileRequest } from '../game/adventures/BattleModel';
+import { BattleModel, levelForXp, xpForLevel, type EnemyTurn, type TileRequest } from '../game/adventures/BattleModel';
 import { GEM_BONUS_PCT, MIN_WORD_LENGTH, lexAttackFrame, rollGem, rollPotion, type Potion } from '../game/adventures/rules';
 import { letterDef } from '../game/letterTiles';
 import { makeButton } from '../game/ui';
@@ -171,6 +171,7 @@ export class BattleScene extends Phaser.Scene {
     this.events.once('shutdown', () => this.cleanup());
 
     this.buildProgress();
+    this.buildXpBar();
     this.buildPotions();
     this.buildTreasures();
     this.refreshHearts();
@@ -179,6 +180,8 @@ export class BattleScene extends Phaser.Scene {
     this.loadLexActor();
     this.announce(ref);
     this.sayIntro();
+    this.showEnemyInfo();
+    this.showEnemyInfo();
     this.setMessage(`Spell a word of ${MIN_WORD_LENGTH}+ letters to attack`);
   }
 
@@ -235,18 +238,61 @@ export class BattleScene extends Phaser.Scene {
     this.bestText?.setText(this.bestWords.join('\n'));
   }
 
-  private buildAttackList(_attacks: { name: string; description: string }[]) {
-    const mk = (y: number, size: string, color: string, bold = false) =>
-      this.uiText(660, y, '', { fontSize: size, color, fontStyle: bold ? 'bold' : 'normal', align: 'center', wordWrap: { width: 190 } }).setOrigin(0.5, 0).setDepth(DEPTH_UI + 3).setVisible(false);
-    this.atkObjs = [mk(350, '16px', '#ff6a4d', true), mk(385, '12px', '#e6d3a8')];
+  private infoObjs: Phaser.GameObjects.GameObject[] = [];
+
+  /** A lore plate with the attack's effect icons and its name in red (PAMBasedEnemy.DrawLorePanel). */
+  private buildPlate(y: number, name: string, effects: { cls: string; args: unknown[] }[]) {
+    const objs: Phaser.GameObjects.GameObject[] = [];
+    const [px, py] = L(660, y);
+    objs.push(this.add.image(px, py, 'lore_plate').setScale(0.86).setDepth(DEPTH_UI + 2));
+    const cels = [...new Set(effects.map((e) => {
+      if (e.cls === 'DamageMultiplierEffect') return (e.args as unknown[])[4] === true ? 7 : 3;
+      return EFFECT_ICON[e.cls] ?? -1;
+    }).filter((c) => c >= 0))];
+    cels.slice(0, 3).forEach((c, i) => objs.push(this.add.image(px - 86 + i * 24, py, 'status_icons', c).setScale(0.55).setDepth(DEPTH_UI + 3)));
+    objs.push(this.add.text(px + 8 + (cels.length ? 0 : 0), py, name, { fontFamily: 'Georgia, serif', fontSize: '14px', fontStyle: 'bold', color: '#c82f16', wordWrap: { width: 120 }, align: 'center' }).setOrigin(0.5).setDepth(DEPTH_UI + 3));
+    return objs;
   }
 
-  /** Show the enemy's attack in the right panel in place of the best-words scroll. */
+  private clearInfo() {
+    for (const o of this.infoObjs) o.destroy();
+    this.infoObjs = [];
+  }
+
+  private buildAttackList(_attacks: { name: string; description: string }[]) {
+    // placeholder kept for call-site symmetry; the panel is built on demand in showAttackInfo / showEnemyInfo
+  }
+
+  /** Enemy info (shown until Lex's first word): its special attacks and its story. */
+  private showEnemyInfo() {
+    const c = this.model.creature;
+    const seen = new Set<string>();
+    const special = c.attacks.filter((a) => a.effects.some((e) => e.cls !== 'DamageEffect') && !seen.has(a.name) && seen.add(a.name)).slice(0, 3);
+    const lore = getLore(c.name);
+    if (!special.length && !lore) return;
+    this.clearInfo();
+    for (const o of this.bestObjs) (o as Phaser.GameObjects.Image).setVisible(false);
+    let y = 338;
+    for (const a of special) {
+      this.infoObjs.push(...this.buildPlate(y, a.name, a.effects));
+      y += 42;
+    }
+    if (lore) {
+      const [tx, ty] = L(660, y + 6);
+      this.infoObjs.push(this.add.text(tx, ty, lore, { fontFamily: 'Georgia, serif', fontSize: '10px', color: '#e6d3a8', align: 'center', wordWrap: { width: 200 } }).setOrigin(0.5, 0).setDepth(DEPTH_UI + 3));
+    }
+  }
+
+  /** The enemy's current attack: its plate and description. Pass null to go back to Best words. */
   private showAttackInfo(name: string | null, description = '') {
+    this.clearInfo();
     const on = !!name;
     for (const o of this.bestObjs) (o as Phaser.GameObjects.Image).setVisible(!on);
-    this.atkObjs[0].setText(name ?? '').setVisible(on);
-    this.atkObjs[1].setText(description).setVisible(on);
+    if (!name) return;
+    const atk = this.model.creature.attacks.find((a) => a.name === name);
+    this.infoObjs.push(...this.buildPlate(350, name, atk?.effects ?? []));
+    const [tx, ty] = L(660, 385);
+    this.infoObjs.push(this.add.text(tx, ty, description, { fontFamily: 'Georgia, serif', fontSize: '12px', color: '#e6d3a8', align: 'center', wordWrap: { width: 200 } }).setOrigin(0.5, 0).setDepth(DEPTH_UI + 3));
   }
 
   private msgTween?: Phaser.Tweens.Tween;
@@ -301,6 +347,32 @@ export class BattleScene extends Phaser.Scene {
       this.tweens.add({ targets: c, x: ex, y: ey, alpha: 0, scale: 0.4, duration: 320, onComplete: () => c.destroy() });
     }
     this.floaters.clear();
+  }
+
+  // ---- XP bar (Lex.lua: empty/full images at (79,1), cropped to the level progress) ----
+  private xpFull?: Phaser.GameObjects.Image;
+
+  private buildXpBar() {
+    const [x, y] = L(79, 1);
+    this.add.image(x, y, 'xp_bar_empty').setOrigin(0, 0).setDepth(DEPTH_UI);
+    this.xpFull = this.add.image(x, y, 'xp_bar_full').setOrigin(0, 0).setDepth(DEPTH_UI + 1);
+    this.updateXpBar();
+  }
+
+  private updateXpBar() {
+    if (!this.xpFull) return;
+    const xp = this.progress.xp;
+    const lvl = levelForXp(xp);
+    const lo = lvl > 1 ? xpForLevel(lvl - 1) : 0;
+    const frac = Math.min(1, Math.max(0, (xp - lo) / (xpForLevel(lvl) - lo)));
+    this.xpFull.setCrop(0, 0, this.xpFull.width * frac, this.xpFull.height);
+  }
+
+  private showLevelUp(level: number) {
+    const [cx, cy] = L(400, 130);
+    const banner = this.add.image(cx, cy, 'levelup_banner').setDepth(DEPTH_BANNER).setScale(0.8);
+    const txt = this.add.text(cx, cy + 4, `Level ${level}!`, { fontFamily: 'Georgia, serif', fontSize: '26px', fontStyle: 'bold', color: '#ffe28a' }).setOrigin(0.5).setStroke('#3a2610', 5).setDepth(DEPTH_BANNER + 1);
+    this.tweens.add({ targets: [banner, txt], alpha: 0, delay: 2200, duration: 600, onComplete: () => { banner.destroy(); txt.destroy(); } });
   }
 
   // ---- chapter progress strip (BattleEngine.DrawProgress): sepia minimap at (284,29), the beaten
@@ -867,6 +939,7 @@ export class BattleScene extends Phaser.Scene {
         this.lexActor?.play('idle', 'idle');
         this.announce(ref);
         this.sayIntro();
+        this.showEnemyInfo();
         this.busy = false;
         this.setButtonEnabled(this.attackBtn, true);
         this.setButtonEnabled(this.scrambleBtn, true);
@@ -903,7 +976,8 @@ export class BattleScene extends Phaser.Scene {
     const chapterDone = nextEnemy >= this.chapter.enemies.length;
     const msgs = [`${creature.name} defeated!`];
     if (creature.xp) msgs.push(`+${creature.xp} XP`);
-    if (leveled) msgs.push(`Level ${levelAfter}!`);
+    if (leveled) { msgs.push(`Level ${levelAfter}!`); this.time.delayedCall(700, () => this.showLevelUp(levelAfter)); }
+    this.updateXpBar();
     if (drop) msgs.push(`found a ${drop} potion`);
     if (newTreasure) this.time.delayedCall(900, () => this.showTreasureAward(newTreasure));
     this.setMessage(msgs.join(' · '), '#ffe28a');

@@ -37,6 +37,8 @@ export class BootScene extends Phaser.Scene {
     this.load.image('bestword_paper', 'adventures/images/bestword_paper.png');
     this.load.image('bestword_title', 'adventures/images/bestword_title.png');
     for (const k of ['box', 'title', 'down']) this.load.image(`hint_${k}`, `adventures/images/hint_${k}.png`);
+    this.load.spritesheet('status_icons', 'adventures/images/status_icons.png', { frameWidth: 50, frameHeight: 50 });
+    for (const k of ['xp_bar_empty', 'xp_bar_full', 'levelup_banner']) this.load.image(k, `adventures/images/${k}.png`);
     this.load.image('boss_banner', 'adventures/images/boss_banner.png');
     this.load.image('boss_text', 'adventures/images/boss_text.png');
     this.load.image('checkpoint_reached', 'adventures/images/checkpoint_reached.png');
