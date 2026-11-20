@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
 import { createMusicToggle, makeButton } from '../game/ui';
+import { stopMusic } from '../game/music';
 import { clearAdvProgress, getAdvProgress, newAdvProgress, setAdvProgress } from '../game/saveManager';
 import { playCutscene } from '../game/cutscene';
 import { bookNumbers, getBook, type GameId } from '../game/adventures/gameData';
@@ -28,6 +29,7 @@ export class GameMenuScene extends Phaser.Scene {
     const g = this.game_;
     const info = TITLES[g];
     setGame(g);
+    stopMusic();
 
     createMusicToggle(this, width - 40, 40);
 

@@ -2,6 +2,8 @@ import Phaser from 'phaser';
 import { bookNumbers, getBook, getChapter } from '../game/adventures/gameData';
 import { getAdvProgress, setAdvProgress } from '../game/saveManager';
 import { assetBase, curGame } from '../game/adventures/gameContext';
+import { musicFor } from '../game/adventures/musicMap';
+import { playMusic } from '../game/music';
 
 // The original book map screen: the book's map at (mapX, 0), chapter icons at the
 // positions from the book script, framed by the shared UI pieces, with the
@@ -75,6 +77,7 @@ export class ChapterIntroScene extends Phaser.Scene {
     const g = curGame();
     const book = getBook(g, this.selBook)!;
     this.cameras.main.setBackgroundColor('#14100b');
+    playMusic(this, musicFor(this.selBook).map);
 
     const img = (x: number, y: number, key: string, depth: number, originX = 0, originY = 0) => {
       const [px, py] = L(x, y);

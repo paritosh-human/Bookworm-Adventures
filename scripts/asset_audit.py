@@ -75,6 +75,7 @@ LEDGER = [
     ("adventures/sounds/lex_chomp.ogg", "battle attack sfx"),
     ("adventures/sounds/buzzer.ogg", "battle invalid-word sfx"),
     ("adventures/sounds/crowdcheer.ogg", "battle victory sfx"),
+    ("adventures/sounds/music.mo3", "decoded (scripts/extract_music.sh) into public/adventures/music/song_NN.ogg; shared by both Adventures games"),
     ("deluxe/sounds/buttonclick.ogg", "button click sfx"),
     ("deluxe/sounds/chomp.ogg", "Deluxe sfx"),
     ("deluxe/sounds/bad.ogg", "Deluxe sfx"),

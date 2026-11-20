@@ -11,9 +11,9 @@ in `ASSETS.md`.
 | Game | Used | Unused | N/A | % used |
 |---|---:|---:|---:|---:|
 | deluxe | 8 | 411 | 5 | 2% |
-| adventures | 3893 | 1268 | 0 | 75% |
+| adventures | 3894 | 1267 | 0 | 75% |
 | adventures-vol2 | 6647 | 2579 | 0 | 72% |
-| **all** | 10548 | 4258 | 5 | 71% |
+| **all** | 10549 | 4257 | 5 | 71% |
 
 ## By category
 
@@ -98,7 +98,7 @@ in `ASSETS.md`.
 | ✅ adventures/scripts/tiles | 14 | 0 | 100% |
 | ✅ adventures/scripts/treasures | 31 | 0 | 100% |
 | ✅ adventures/scripts/wordlists | 8 | 0 | 100% |
-| 🟡 adventures/sounds | 111 | 50 | 69% |
+| 🟡 adventures/sounds | 112 | 49 | 70% |
 | 🟡 deluxe/(root) | 2 | 1 | 67% |
 | ⬜ deluxe/fonts | 0 | 44 | 0% |
 | 🟡 deluxe/images | 2 | 277 | 1% |

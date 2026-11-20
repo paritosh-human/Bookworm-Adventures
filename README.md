@@ -186,3 +186,16 @@ Not built yet: potion/treasure items on the pedestals, Lex's Level-up banner/XP 
   requesting a file. Regenerated automatically at the end of `prepare_adventures_assets.py`; re-run it by hand
   after adding/renaming raw Volume 2 art. Verified: all 156 Volume 2 creature/Lex pams and all real Volume 1
   pams now resolve every referenced part image with zero "failed to process file" errors.
+
+### Background music
+- `raw-assets/adventures/sounds/music.mo3` is the original game's music: a single tracker module
+  (MO3/Impulse Tracker, decoded with `libopenmpt`'s `openmpt123`) bundling 16 unnamed subsongs — one long
+  map theme plus several battle/boss cues. Volume 2 ships no music file of its own; its scripts reference the
+  same `MUSIC_*` song-position constants Volume 1 uses, so both games share this one source.
+- `scripts/extract_music.sh` renders each subsong and re-encodes it to `public/adventures/music/song_NN.ogg`
+  (Opus-in-Ogg via `ffmpeg`). Needs `brew install libopenmpt` once.
+- `src/game/music.ts` loads/loops/swaps tracks on a scene's sound manager; `src/game/adventures/musicMap.ts`
+  maps each book to a `{map, battle, boss}` track triple. **That mapping is an unverified best guess** (picked
+  by each subsong's rendered length, not by ear — the real numeric values behind `MUSIC_GREEK_MAP` etc. aren't
+  in the decompiled scripts). `ChapterIntroScene` plays the map track; `BattleScene` plays battle or boss music
+  per enemy. If a track sounds wrong for its book, swap the index in `musicMap.ts`.

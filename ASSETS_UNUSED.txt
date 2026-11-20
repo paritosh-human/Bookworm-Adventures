@@ -3895,7 +3895,7 @@ adventures/properties/DefaultTreasures.xml
 adventures/properties/InitialMiniGames.xml
 adventures/properties/TimedMode.xml
 
-## adventures/sounds (50 unused)
+## adventures/sounds (49 unused)
 adventures/sounds/XPGain4.ogg
 adventures/sounds/firework1.ogg
 adventures/sounds/kubwa_greeting.ogg
@@ -3911,7 +3911,6 @@ adventures/sounds/lex_levelup.ogg
 adventures/sounds/lex_unbelievable.ogg
 adventures/sounds/lex_verygood.ogg
 adventures/sounds/low_health.wav
-adventures/sounds/music.mo3
 adventures/sounds/potionpickup.ogg
 adventures/sounds/sloooowdown.ogg
 adventures/sounds/textreadblip.wav

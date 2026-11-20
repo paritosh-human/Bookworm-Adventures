@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
 import { createMusicToggle, makeButton } from '../game/ui';
+import { stopMusic } from '../game/music';
 
 /** Top-level menu: pick a game. Each Adventures game then opens its own
  * Resume / New Game / Reset menu (GameMenuScene). */
@@ -10,6 +11,7 @@ export class MainMenuScene extends Phaser.Scene {
 
   create() {
     const { width } = this.scale;
+    stopMusic();
 
     createMusicToggle(this, width - 40, 40);
 

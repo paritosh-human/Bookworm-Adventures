@@ -15,6 +15,8 @@ import { GEM_BONUS_PCT, MIN_WORD_LENGTH, lexAttackFrame, rollGem, rollPotion, ty
 import { letterDef } from '../game/letterTiles';
 import { makeButton } from '../game/ui';
 import type { AdvProgress } from '../game/types';
+import { musicFor } from '../game/adventures/musicMap';
+import { playMusic } from '../game/music';
 
 
 // The original battle screen is an 800x600 layout: name bars along the top, a
@@ -120,6 +122,8 @@ export class BattleScene extends Phaser.Scene {
     useWordlists({ colors: [...getWordlist(curGame(), 'colors')], metals: [...getWordlist(curGame(), 'metals')], animals: [...getWordlist(curGame(), 'animals')] });
     this.equipped = (p.treasures ?? []).slice(-3);
     this.model = new BattleModel(creature, levelForXp(p.xp), p.hearts, Math.random, combineTreasures(this.equipped), getDefense(curGame(), creature));
+    const music = musicFor(p.book);
+    playMusic(this, ref.boss ? music.boss : music.battle);
 
     this.addFrameImage('battle_curtain_left', 0, 0, 1);
     this.addFrameImage('battle_curtain_right', 800, 0, 0);
@@ -1053,6 +1057,8 @@ export class BattleScene extends Phaser.Scene {
     this.monsterActor?.destroy();
     this.monsterActor = undefined;
     this.model = new BattleModel(creature, levelForXp(p.xp), p.hearts, Math.random, combineTreasures(this.equipped), getDefense(curGame(), creature));
+    const music = musicFor(p.book);
+    playMusic(this, ref.boss ? music.boss : music.battle);
     this.nameText.setText(creature.name).setScale(1);
     if (this.nameText.width > 78) this.nameText.setScale(78 / this.nameText.width);
     this.showAttackInfo(null);
