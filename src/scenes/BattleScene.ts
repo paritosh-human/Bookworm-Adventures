@@ -577,7 +577,7 @@ export class BattleScene extends Phaser.Scene {
       // projectiles / bites travel the right distance to the enemy.
       // Vol. 2's Lex pam is 800x600 with his feet ~70px higher in the canvas
       const v2 = curGame() === 'adventures2';
-      const [x, y] = v2 ? L(-70, 0) : L(-120, STAGE_Y - 10 + 330 * (ACTOR_SCALE - LEX_SCALE)); // keep his feet on the same ground line
+      const [x, y] = v2 ? L(-50, 0) : L(-120, STAGE_Y - 10 + 330 * (ACTOR_SCALE - LEX_SCALE)); // keep his feet on the same ground line
       // lex.pam's "engage" entrance drops an alarm clock (lex_timehelmet) on Lex's head that the data
       // only ever clears on a "basepose" frame right before his first attack — our looped idle segment
       // never reaches that frame, so it would otherwise sit there forever. Vol. 2's Prologue (Lex just
@@ -643,7 +643,7 @@ export class BattleScene extends Phaser.Scene {
       if (!this.sys.isActive()) return;
       // Enemy pams are authored right-aligned on the 800px stage (a 400px pam sits at x=400).
       const v2 = curGame() === 'adventures2';
-      const [x, y] = L(800 - (pam.size?.[0] ?? 400) * ACTOR_SCALE + (v2 ? -45 : 200) + offsetX + (ENEMY_OFFSETS[stem]?.x ?? 0), (v2 ? -41 : STAGE_Y - 45) + (ENEMY_OFFSETS[stem]?.y ?? 0));
+      const [x, y] = L(800 - (pam.size?.[0] ?? 400) * ACTOR_SCALE + (v2 ? -25 : 200) + offsetX + (ENEMY_OFFSETS[stem]?.x ?? 0), (v2 ? -41 : STAGE_Y - 45) + (ENEMY_OFFSETS[stem]?.y ?? 0));
       this.monsterActor = new PamActor(this, x, y, pam, 'idle', pamImageTextureKey, { fit: false });
       this.monsterActor.root.setScale(ACTOR_SCALE);
       this.monsterActor.root.setDepth(DEPTH_ACTORS);
