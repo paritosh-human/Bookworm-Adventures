@@ -14,6 +14,7 @@ import { BattleModel, levelForXp, xpForLevel, type EnemyTurn, type TileRequest }
 import { GEM_BONUS_PCT, MIN_WORD_LENGTH, lexAttackFrame, rollGem, rollPotion, type Potion } from '../game/adventures/rules';
 import { letterDef } from '../game/letterTiles';
 import { makeButton } from '../game/ui';
+import { haptics } from '../game/haptics';
 import type { AdvProgress } from '../game/types';
 import { musicFor } from '../game/adventures/musicMap';
 import { playMusic } from '../game/music';
@@ -350,7 +351,11 @@ export class BattleScene extends Phaser.Scene {
         const txt = this.add.text(0, 0, tile.def.letter.toUpperCase(), { fontFamily: 'Georgia, serif', fontSize: `${Math.floor(size * 0.55)}px`, fontStyle: 'bold', color: '#1b1409' }).setOrigin(0.5);
         c = this.add.container(tile.bg.x, tile.bg.y, [bg, txt]).setDepth(DEPTH_BANNER - 2);
         if (tile.gem && this.textures.exists(`gem_${tile.gem}`)) bg.setTexture(`gem_${tile.gem}`).setDisplaySize(size, size);
-        c.setSize(size, size).setInteractive({ useHandCursor: true }).on('pointerdown', () => this.grid.deselect(tile));
+        c.setSize(size, size).setInteractive({ useHandCursor: true }).on('pointerdown', () => {
+          const power = tile.def.tier !== 'bronze' || !!tile.gem;
+          haptics.tileTap(power, this.grid.currentWord().length - 1);
+          this.grid.deselect(tile);
+        });
         this.floaters.set(tile, c);
         this.setTileShown(tile, false);
       }
@@ -740,6 +745,7 @@ export class BattleScene extends Phaser.Scene {
   private handleSubmit(word: string, tiles: GridTile[]) {
     if (this.over || this.busy) return;
     if (word.length < MIN_WORD_LENGTH || !isValidWord(word)) {
+      haptics.reject();
       if (this.cache.audio.exists('battle_bad')) this.sound.play('battle_bad');
       this.setMessage(word.length < MIN_WORD_LENGTH ? `Words need ${MIN_WORD_LENGTH}+ letters` : `"${word.toUpperCase()}" isn't a word`, '#ff8a7a');
       this.grid.clearSelection();
@@ -770,6 +776,7 @@ export class BattleScene extends Phaser.Scene {
     const lexMs = this.choreograph(
       this.lexActor, lexFrame, this.lexIdle(),
       () => {
+        haptics.hit();
         playSfx(this, LEX_ATTACK_SOUND[lexFrame], 0.7, true); // lands with the hit
         this.monsterActor?.play('flinch', 'idle');
         this.refreshHearts();
@@ -826,7 +833,10 @@ export class BattleScene extends Phaser.Scene {
     const onHit = () => {
       if (turn.attackName) playSfx(this, this.cues?.attacks[turn.attackName]); // lands with the hit
       this.refreshHearts();
-      if (turn.damage > 0 || turn.ailmentDamage > 0) this.lexActor?.play('flinch', this.lexIdle());
+      if (turn.damage > 0 || turn.ailmentDamage > 0) {
+        haptics.hurt();
+        this.lexActor?.play('flinch', this.lexIdle());
+      }
       this.applyTileRequests(turn.tiles);
       this.grid.tickStatuses();
       this.spreadPlague();
@@ -1005,14 +1015,22 @@ export class BattleScene extends Phaser.Scene {
       const cx = 55 + i * 90;
       const [px, py] = L(cx - 35, 365);
       if (this.textures.exists('ui_treasure_pedestal')) this.add.image(px, py, 'ui_treasure_pedestal').setOrigin(0, 0).setDepth(DEPTH_UI);
-      this.withTreasureTexture(t, (key) => {
-        const [ix, iy] = L(cx, 392);
-        this.add.image(ix, iy, key).setOrigin(0.5, 0).setDepth(DEPTH_UI + 1);
-      });
+      const [ix, iy] = L(cx, 392);
       const name = this.uiText(cx, 500, t.name, { fontSize: '10px', color: '#f2e6c9', align: 'center', wordWrap: { width: 84 } }).setOrigin(0.5, 0).setDepth(DEPTH_UI + 1);
       const info = name.setInteractive({ useHandCursor: true }).on('pointerover', () => this.setMessage(`${t.name}: ${t.lore}`, '#ffe28a'));
       const more = this.uiText(cx, 520, '(more info)', { fontSize: '10px', color: '#ff6a4d' }).setDepth(DEPTH_UI + 1).setInteractive({ useHandCursor: true });
       more.on('pointerdown', () => this.showTreasureAward(id, 'Treasure'));
+      this.withTreasureTexture(t, (key) => {
+        const icon = this.add.image(ix, iy, key).setOrigin(0.5, 0).setDepth(DEPTH_UI + 1);
+        // Treasure art varies a lot in height (a small cereal bowl vs. a tall vase) — the name
+        // and info-link labels were pinned to a fixed y that assumed a tall icon, leaving a big
+        // empty gap under smaller ones. Snap them up to sit just under the icon's real bottom
+        // edge instead, never lower than the original fixed position.
+        const labelY = Math.min(name.y, iy + icon.displayHeight + 6);
+        const delta = labelY - name.y;
+        name.y += delta;
+        more.y += delta;
+      });
     });
   }
 
@@ -1095,6 +1113,7 @@ export class BattleScene extends Phaser.Scene {
 
   private handleVictory() {
     this.over = true;
+    haptics.heavy();
     const p = this.progress;
     const creature = this.model.creature;
     const ref = this.chapter.enemies[p.enemy];
@@ -1186,6 +1205,7 @@ export class BattleScene extends Phaser.Scene {
 
   private handleDefeat() {
     this.over = true;
+    haptics.heavy();
     const p = this.progress;
     this.lexActor?.play('death', '');
     // the scripts' "death" lines are said when LEX falls ("Beaten? By this guy?" / the enemy gloating)

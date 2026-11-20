@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
 import { randomLetter, letterDef, TIER_COLORS } from './letterTiles';
+import { haptics } from './haptics';
 import type { LetterDef, Tier } from './types';
 
 export interface GridTile {
@@ -124,12 +125,15 @@ export class LetterGrid {
 
   private trySelect(tile: GridTile) {
     if (tile.status && DISABLING.includes(tile.status.kind)) return;
+    const power = tile.def.tier !== 'bronze' || !!tile.gem;
     const last = this.selected[this.selected.length - 1];
     if (this.selected.includes(tile)) {
+      haptics.tileTap(power, this.selected.length - 1);
       this.deselect(tile);
       return;
     }
     if (last && this.opts.requireAdjacent !== false && !this.isAdjacent(last, tile)) return;
+    haptics.tileTap(power, this.selected.length + 1);
     this.selected.push(tile);
     this.refreshHighlight();
     this.emitSelection();

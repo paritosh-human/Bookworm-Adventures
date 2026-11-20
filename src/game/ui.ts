@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
 import { isMuted, setMuted } from './audioSettings';
+import { haptics } from './haptics';
 
 /** A small round music on/off badge, drawn in the same gold-on-dark style as the rest of the
  * UI (no dedicated icon asset exists in the extracted art for this). Mutes the whole game's
@@ -49,6 +50,7 @@ export function createMusicToggle(scene: Phaser.Scene, x: number, y: number, rad
   bg.on('pointerover', () => bg.setFillStyle(muted ? 0x332416 : 0x543c24));
   bg.on('pointerout', () => draw());
   bg.on('pointerdown', () => {
+    haptics.tap();
     muted = !muted;
     scene.sound.mute = muted;
     setMuted(muted);
@@ -102,6 +104,7 @@ export function createFullscreenToggle(scene: Phaser.Scene, x: number, y: number
   bg.on('pointerover', () => bg.setFillStyle(0x543c24));
   bg.on('pointerout', () => bg.setFillStyle(0x3b2a1a));
   bg.on('pointerdown', () => {
+    haptics.tap();
     if (scene.scale.isFullscreen) {
       scene.scale.stopFullscreen();
     } else {
@@ -140,6 +143,7 @@ export function makeButton(
   bg.on('pointerover', () => bg.setFillStyle(0x543c24));
   bg.on('pointerout', () => bg.setFillStyle(0x3b2a1a));
   bg.on('pointerdown', () => {
+    haptics.tap();
     if (scene.cache.audio.exists('buttonclick')) scene.sound.play('buttonclick');
     onClick();
   });

@@ -36,14 +36,25 @@ if (window.matchMedia('(pointer: coarse)').matches) {
     overlay.classList.toggle('show', portrait && !document.fullscreenElement);
   };
 
+  // Phaser's Scale Manager computes the canvas size from the #app element's box as soon as it
+  // sees a resize, but on a fullscreen/orientation-lock transition the browser reports a stale
+  // intermediate viewport for a beat (iOS and Android both do this) — Phaser locks onto that
+  // wrong size and never re-checks until something else triggers a resize, which is exactly why
+  // a physical 180° rotation "fixes" it: that's a second, late, correctly-sized resize event.
+  // Force a few explicit re-checks instead of waiting on one.
+  const resync = () => {
+    for (const delay of [0, 150, 350, 600, 1000]) setTimeout(() => game.scale.refresh(), delay);
+  };
+
   btn.addEventListener('click', () => {
     document.documentElement.requestFullscreen?.().catch(() => {});
     const orientation = screen.orientation as ScreenOrientation & { lock?: (o: string) => Promise<void> };
-    orientation.lock?.('landscape').catch(() => {});
+    orientation.lock?.('landscape').catch(() => {}).finally(resync);
+    resync();
   });
 
-  window.addEventListener('orientationchange', updateOverlay);
-  window.matchMedia('(orientation: portrait)').addEventListener('change', updateOverlay);
-  document.addEventListener('fullscreenchange', updateOverlay);
+  window.addEventListener('orientationchange', () => { updateOverlay(); resync(); });
+  window.matchMedia('(orientation: portrait)').addEventListener('change', () => { updateOverlay(); resync(); });
+  document.addEventListener('fullscreenchange', () => { updateOverlay(); resync(); });
   updateOverlay();
 }
