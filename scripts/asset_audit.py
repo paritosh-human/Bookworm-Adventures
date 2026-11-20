@@ -81,6 +81,17 @@ LEDGER = [
     ("deluxe/sounds/screenburngameover.ogg", "Deluxe sfx"),
 ]
 
+def _expand(ledger):
+    out = []
+    for pat, note in ledger:
+        out.append((pat, note))
+        if pat.startswith("adventures/"):
+            out.append(("adventures-vol2/" + pat[len("adventures/"):].replace("Book[123]", "Book[0-9]"), note + " (Vol2)"))
+    return out
+
+
+LEDGER = _expand(LEDGER)
+
 NOT_APPLICABLE = [
     "*.exe", "*.dll", "deluxe/Registration-Key.txt", "deluxe/properties/*",
 ]
@@ -102,11 +113,14 @@ def clean(name: str) -> str:
     return name[5:] if name.startswith("(add)") else name
 
 
-def used_pam_stems() -> set[str]:
-    data = json.loads((ROOT / "src/assets/adventures/game_data.json").read_text())
+DATA = {"adventures": "game_data.json", "adventures-vol2": "game_data_vol2.json"}
+
+
+def used_pam_stems(game: str) -> set[str]:
+    data = json.loads((ROOT / "src/assets/adventures" / DATA[game]).read_text())
     stems = {stem for c in data["creatures"].values() for stem in c["pam"]} | {"lex"}
-    for p in (RAW / "adventures/images/pam").glob("*.pam"):
-        if re.fullmatch(r"(MG|FG)[123]-\d+", p.stem):
+    for p in (RAW / game / "images/pam").glob("*.pam"):
+        if re.fullmatch(r"(MG|FG)\d+-\d+", p.stem) or p.stem.lower().startswith(("lex", "dancelex")):
             stems.add(p.stem)
     return stems
 
@@ -122,20 +136,24 @@ def public_stems(game: str) -> set[str]:
     return out
 
 
-def arena_paths() -> set[str]:
-    data = json.loads((ROOT / "src/assets/adventures/game_data.json").read_text())
+def arena_paths(game: str) -> set[str]:
+    data = json.loads((ROOT / "src/assets/adventures" / DATA[game]).read_text())
     return {(ch.get("arena") or {}).get("path", "").lower() for b in data["books"].values() for ch in b["chapters"]} - {""}
 
 
 def main():
-    arenas = arena_paths()
-    stems_used = used_pam_stems()
-    used_part_images: set[str] = set()
-    for stem in stems_used:
-        f = RAW / "adventures/images/pam" / f"{stem}.pam"
-        if f.exists():
-            for img in decode_pam(f)["image"]:
-                used_part_images.add(clean(img["name"]))
+    arenas = {g: arena_paths(g) for g in DATA}
+    stems_used = {g: used_pam_stems(g) for g in DATA}
+    used_part_images = {g: set() for g in DATA}
+    for g in DATA:
+        for stem in stems_used[g]:
+            f = RAW / g / "images/pam" / f"{stem}.pam"
+            if f.exists():
+                try:
+                    for img in decode_pam(f)["image"]:
+                        used_part_images[g].add(clean(img["name"]).lower())
+                except Exception:
+                    pass
 
     pub = {g: public_stems(g) for g in GAMES}
     status: dict[str, tuple[str, str]] = {}  # path -> (USED|UNUSED|N/A, note)
@@ -155,14 +173,14 @@ def main():
                 if fnmatch.fnmatch(r, pat):
                     verdict = ("USED", note)
                     break
-        if verdict is None and game == "adventures" and r.rsplit(".", 1)[0].rstrip("_").lower().replace("adventures/", "", 1) in arenas:
+        if verdict is None and game in DATA and r.rsplit(".", 1)[0].rstrip("_").lower().replace(game + "/", "", 1) in arenas[game]:
             verdict = ("USED", "composited into a per-chapter arena (arena_bNcM.png)")
         if verdict is None and "images/pam" in r:
             if "images/pam/images/" in r:
                 name = p.stem[:-1] if is_mask(p) else p.stem
-                if game == "adventures" and name in used_part_images:
+                if game in DATA and name.lower() in used_part_images[game]:
                     verdict = ("USED", "body part of a rendered .pam animation")
-            elif p.suffix == ".pam" and game == "adventures" and p.stem in stems_used:
+            elif p.suffix == ".pam" and game in DATA and p.stem in stems_used[game]:
                 verdict = ("USED", "rendered animation (monster / Lex / scenery)")
         if verdict is None and game in pub and "images/pam" not in r:
             stem = (mask_base_stem(p) if is_mask(p) else p.stem).lower()

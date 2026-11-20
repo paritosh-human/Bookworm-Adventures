@@ -11,21 +11,21 @@ in `ASSETS.md`.
 | Game | Used | Unused | N/A | % used |
 |---|---:|---:|---:|---:|
 | deluxe | 8 | 411 | 5 | 2% |
-| adventures | 3875 | 1286 | 0 | 75% |
-| adventures-vol2 | 171 | 9055 | 0 | 2% |
-| **all** | 4054 | 10752 | 5 | 27% |
+| adventures | 3893 | 1268 | 0 | 75% |
+| adventures-vol2 | 6647 | 2579 | 0 | 72% |
+| **all** | 10548 | 4258 | 5 | 71% |
 
 ## By category
 
 | Category | Used | Unused | % used |
 |---|---:|---:|---:|
-| ⬜ adventures-vol2/cutscenes | 0 | 5 | 0% |
-| ⬜ adventures-vol2/data | 0 | 10 | 0% |
+| 🟡 adventures-vol2/cutscenes | 1 | 4 | 20% |
+| 🟡 adventures-vol2/data | 1 | 9 | 10% |
 | ⬜ adventures-vol2/fonts | 0 | 45 | 0% |
-| 🟡 adventures-vol2/images | 2 | 115 | 2% |
+| 🟡 adventures-vol2/images | 4 | 113 | 3% |
 | 🟡 adventures-vol2/images/LevelUp | 2 | 14 | 12% |
-| ⬜ adventures-vol2/images/arenas | 0 | 32 | 0% |
-| 🟡 adventures-vol2/images/board | 9 | 83 | 10% |
+| 🟡 adventures-vol2/images/arenas | 31 | 1 | 97% |
+| 🟡 adventures-vol2/images/board | 28 | 64 | 30% |
 | ⬜ adventures-vol2/images/books | 0 | 182 | 0% |
 | ⬜ adventures-vol2/images/bookselect | 0 | 21 | 0% |
 | ⬜ adventures-vol2/images/characters | 0 | 61 | 0% |
@@ -35,30 +35,30 @@ in `ASSETS.md`.
 | 🟡 adventures-vol2/images/items | 12 | 2 | 86% |
 | ⬜ adventures-vol2/images/mainmenu | 0 | 40 | 0% |
 | ⬜ adventures-vol2/images/minigames | 0 | 186 | 0% |
-| ⬜ adventures-vol2/images/pam | 0 | 6967 | 0% |
+| 🟡 adventures-vol2/images/pam | 5752 | 1215 | 83% |
 | ⬜ adventures-vol2/images/replay | 0 | 78 | 0% |
 | ⬜ adventures-vol2/images/statsbook | 0 | 52 | 0% |
-| 🟡 adventures-vol2/images/tiles | 7 | 54 | 11% |
+| 🟡 adventures-vol2/images/tiles | 34 | 27 | 56% |
 | 🟡 adventures-vol2/images/treasures | 2 | 143 | 1% |
-| ⬜ adventures-vol2/images/tutorial | 0 | 93 | 0% |
+| 🟡 adventures-vol2/images/tutorial | 14 | 79 | 15% |
 | ⬜ adventures-vol2/images/upsell | 0 | 7 | 0% |
 | 🟡 adventures-vol2/images/wordscroll | 4 | 2 | 67% |
-| ⬜ adventures-vol2/properties | 0 | 14 | 0% |
-| ⬜ adventures-vol2/scripts | 0 | 33 | 0% |
-| ⬜ adventures-vol2/scripts/MiniGames | 0 | 12 | 0% |
-| ⬜ adventures-vol2/scripts/arenas | 0 | 1 | 0% |
-| ⬜ adventures-vol2/scripts/attacks | 0 | 4 | 0% |
-| ⬜ adventures-vol2/scripts/books | 0 | 11 | 0% |
-| ⬜ adventures-vol2/scripts/creatures | 0 | 424 | 0% |
-| ⬜ adventures-vol2/scripts/defenses | 0 | 3 | 0% |
-| ⬜ adventures-vol2/scripts/effects | 0 | 41 | 0% |
-| ⬜ adventures-vol2/scripts/fireworks | 0 | 1 | 0% |
-| ⬜ adventures-vol2/scripts/items | 0 | 4 | 0% |
-| ⬜ adventures-vol2/scripts/packs | 0 | 8 | 0% |
-| ⬜ adventures-vol2/scripts/tiles | 0 | 17 | 0% |
-| ⬜ adventures-vol2/scripts/treasures | 0 | 32 | 0% |
-| ⬜ adventures-vol2/scripts/wordlists | 0 | 10 | 0% |
-| 🟡 adventures-vol2/sounds | 133 | 162 | 45% |
+| 🟡 adventures-vol2/properties | 7 | 7 | 50% |
+| 🟡 adventures-vol2/scripts | 31 | 2 | 94% |
+| ✅ adventures-vol2/scripts/MiniGames | 12 | 0 | 100% |
+| ✅ adventures-vol2/scripts/arenas | 1 | 0 | 100% |
+| ✅ adventures-vol2/scripts/attacks | 4 | 0 | 100% |
+| ✅ adventures-vol2/scripts/books | 11 | 0 | 100% |
+| ✅ adventures-vol2/scripts/creatures | 424 | 0 | 100% |
+| ✅ adventures-vol2/scripts/defenses | 3 | 0 | 100% |
+| ✅ adventures-vol2/scripts/effects | 41 | 0 | 100% |
+| ✅ adventures-vol2/scripts/fireworks | 1 | 0 | 100% |
+| ✅ adventures-vol2/scripts/items | 4 | 0 | 100% |
+| ✅ adventures-vol2/scripts/packs | 8 | 0 | 100% |
+| ✅ adventures-vol2/scripts/tiles | 17 | 0 | 100% |
+| ✅ adventures-vol2/scripts/treasures | 32 | 0 | 100% |
+| ✅ adventures-vol2/scripts/wordlists | 10 | 0 | 100% |
+| 🟡 adventures-vol2/sounds | 156 | 139 | 53% |
 | 🟡 adventures/cutscenes | 1 | 3 | 25% |
 | 🟡 adventures/data | 1 | 8 | 11% |
 | ⬜ adventures/fonts | 0 | 27 | 0% |
@@ -75,7 +75,7 @@ in `ASSETS.md`.
 | ⬜ adventures/images/mainmenu | 0 | 64 | 0% |
 | ⬜ adventures/images/minigames | 0 | 72 | 0% |
 | ⬜ adventures/images/misc | 0 | 11 | 0% |
-| 🟡 adventures/images/pam | 2872 | 365 | 89% |
+| 🟡 adventures/images/pam | 2880 | 357 | 89% |
 | ⬜ adventures/images/statsbook | 0 | 46 | 0% |
 | 🟡 adventures/images/tiles | 29 | 25 | 54% |
 | 🟡 adventures/images/treasures | 2 | 77 | 3% |
@@ -98,7 +98,7 @@ in `ASSETS.md`.
 | ✅ adventures/scripts/tiles | 14 | 0 | 100% |
 | ✅ adventures/scripts/treasures | 31 | 0 | 100% |
 | ✅ adventures/scripts/wordlists | 8 | 0 | 100% |
-| 🟡 adventures/sounds | 101 | 60 | 63% |
+| 🟡 adventures/sounds | 111 | 50 | 69% |
 | 🟡 deluxe/(root) | 2 | 1 | 67% |
 | ⬜ deluxe/fonts | 0 | 44 | 0% |
 | 🟡 deluxe/images | 2 | 277 | 1% |

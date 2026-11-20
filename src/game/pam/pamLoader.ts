@@ -29,6 +29,20 @@ export function flushLoader(scene: Phaser.Scene): Promise<void> {
 const runLoader = flushLoader;
 
 const pamCache = new Map<string, PamInfo>();
+const indexCache = new Map<string, Record<string, string>>();
+/** lowercase -> real on-disk name for this game and kind (see scripts/build_image_index.py) */
+async function fileIndex(kind: 'images_index' | 'pam_index'): Promise<Record<string, string>> {
+  const base = assetBase();
+  const cacheId = `${base}/${kind}`;
+  let idx = indexCache.get(cacheId);
+  if (!idx) {
+    try { idx = await (await fetch(`${base}/pam/${kind}.json`)).json(); } catch { idx = {}; }
+    indexCache.set(cacheId, idx!);
+  }
+  return idx!;
+}
+const imageIndex = () => fileIndex('images_index');
+const pamIndex = () => fileIndex('pam_index');
 const cacheKey = (stem: string) => `${assetBase()}/${stem}`;
 
 /** Loads a creature's .pam file plus every body-part image it references,
@@ -38,16 +52,20 @@ export async function loadPamActorAssets(scene: Phaser.Scene, pamFileStem: strin
   const cached = pamCache.get(cacheKey(pamFileStem));
   if (cached) return cached;
 
+  const pidx = await pamIndex();
+  const realStem = pidx[pamFileStem.toLowerCase()] ?? pamFileStem;
   const binaryKey = `pambin_${keyPrefix()}${pamFileStem}`;
-  scene.load.binary(binaryKey, `${assetBase()}/pam/${pamFileStem}.pam`);
+  scene.load.binary(binaryKey, `${assetBase()}/pam/${realStem}.pam`);
   await runLoader(scene);
   const buffer = scene.cache.binary.get(binaryKey) as ArrayBuffer;
   const pam = decodePam(buffer);
 
+  const idx = await imageIndex();
   for (const img of pam.image) {
     const key = pamImageTextureKey(img.name);
     if (!scene.textures.exists(key)) {
-      scene.load.image(key, `${assetBase()}/pam/images_rgba/${cleanImageName(img.name)}.png`);
+      const clean = cleanImageName(img.name);
+      scene.load.image(key, `${assetBase()}/pam/images_rgba/${idx[clean.toLowerCase()] ?? clean}.png`);
     }
   }
   await runLoader(scene);

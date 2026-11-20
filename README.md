@@ -178,3 +178,11 @@ Not built yet: potion/treasure items on the pedestals, Lex's Level-up banner/XP 
 - `defenses.ts` reads each enemy's named defenses (armor, immunities, word-length immunity, bonus word lists
   from `scripts/wordlists`). `sfx.ts` + `sounds.json` play per-creature attack/hit/engage/death sounds.
 - `gameContext.ts` switches between `adventures` and `adventures2` (asset folder `public/adventures-vol2`).
+- Volume 2's extracted `.pam`/image filenames don't always match the case the `.pam` data references them
+  by (e.g. data says `lex_petrify1`, disk has `Lex_petrify1.png`; a handful of `.pam` files themselves are
+  off too, e.g. `9BookBurner` vs `9Bookburner.pam`) — macOS' case-insensitive filesystem hides this, a normal
+  static host won't. `scripts/build_image_index.py` writes `pam/images_index.json` and `pam/pam_index.json`
+  (lowercase name → real on-disk name) per game; `pamLoader.ts` looks both up through these indexes before
+  requesting a file. Regenerated automatically at the end of `prepare_adventures_assets.py`; re-run it by hand
+  after adding/renaming raw Volume 2 art. Verified: all 156 Volume 2 creature/Lex pams and all real Volume 1
+  pams now resolve every referenced part image with zero "failed to process file" errors.

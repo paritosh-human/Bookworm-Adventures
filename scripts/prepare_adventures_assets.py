@@ -91,6 +91,9 @@ def main():
     ]:
         print(out, composite(rel, out))
 
+    import subprocess
+    subprocess.run(["python3", str(Path(__file__).parent / "build_image_index.py")], check=True)
+
 
 if __name__ == "__main__":
     main()
