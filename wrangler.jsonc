@@ -1,6 +1,6 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
-  "name": "bookworm-adventures-web",
+  "name": "bookworm-adventures",
   "compatibility_date": "2026-11-19",
   "observability": {
     "enabled": true
