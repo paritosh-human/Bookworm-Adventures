@@ -167,7 +167,7 @@ export class BattleScene extends Phaser.Scene {
     this.scrambleBtn = this.imageButton(151, 580, 'btn_scramble', () => this.handleScramble());
     this.imageButton(658, 580, 'btn_menu', () => {
       this.grid.destroy();
-      this.scene.start('MainMenu');
+      this.scene.start('GameMenu', { game: curGame() });
     });
 
     this.input.keyboard?.on('keydown-ENTER', () => this.grid.submit());
@@ -1151,7 +1151,7 @@ export class BattleScene extends Phaser.Scene {
       // Crossing into a new chapter (or finishing the Adventure) still needs a click.
       this.time.delayedCall(1400, () =>
         this.showContinue(label, () => {
-          if (label === 'Adventure Complete!') this.scene.start('MainMenu');
+          if (label === 'Adventure Complete!') this.scene.start('GameMenu', { game: curGame() });
           else this.scene.start('ChapterIntro');
         }),
       );

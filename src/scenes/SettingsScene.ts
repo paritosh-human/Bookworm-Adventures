@@ -1,8 +1,8 @@
 import Phaser from 'phaser';
-import { makeButton } from '../game/ui';
-import { clearAdvProgress, loadSave, writeSave } from '../game/saveManager';
+import { createMusicToggle, makeButton } from '../game/ui';
 
-/** Home-page settings: reset progress (each reset asks for confirmation first). */
+/** Home-page settings: reset progress (each reset asks for confirmation first). Per-game
+ * Adventures resets live in each game's own menu (GameMenuScene) now. */
 export class SettingsScene extends Phaser.Scene {
   private layer: Phaser.GameObjects.GameObject[] = [];
 
@@ -12,13 +12,11 @@ export class SettingsScene extends Phaser.Scene {
 
   create() {
     const { width } = this.scale;
+    createMusicToggle(this, width - 40, 40);
     this.add.text(width / 2, 70, 'Settings', { fontFamily: 'Georgia, serif', fontSize: '36px', color: '#f2e6c9' }).setOrigin(0.5);
     this.add.text(width / 2, 120, 'Reset progress', { fontFamily: 'Georgia, serif', fontSize: '18px', color: '#a08a5f' }).setOrigin(0.5);
 
     const items: { label: string; what: string; run: () => void }[] = [
-      { label: 'Reset Bookworm Adventures', what: 'all Bookworm Adventures progress (chapters, XP, potions, treasures, hints)', run: () => clearAdvProgress('adventures') },
-      { label: 'Reset Adventures Volume 2', what: 'all Volume 2 progress', run: () => clearAdvProgress('adventures2') },
-      { label: 'Reset Deluxe high score', what: 'your Bookworm Deluxe high score', run: () => { const s = loadSave(); s.deluxeHighScore = 0; writeSave(s); } },
       { label: 'Reset EVERYTHING', what: 'ALL saved history for every game', run: () => localStorage.removeItem('bookworm-adventures-save') },
     ];
     items.forEach((it, i) => makeButton(this, width / 2, 190 + i * 62, 380, 48, it.label, () => this.confirm(it)));

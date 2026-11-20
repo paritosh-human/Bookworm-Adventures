@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
 import { BootScene } from './scenes/BootScene';
 import { MainMenuScene } from './scenes/MainMenuScene';
+import { GameMenuScene } from './scenes/GameMenuScene';
 import { DeluxeScene } from './scenes/DeluxeScene';
 import { BattleScene } from './scenes/BattleScene';
 import { SettingsScene } from './scenes/SettingsScene';
@@ -16,7 +17,7 @@ const game = new Phaser.Game({
     width: 960,
     height: 620,
   },
-  scene: [BootScene, MainMenuScene, DeluxeScene, ChapterIntroScene, BattleScene, SettingsScene],
+  scene: [BootScene, MainMenuScene, GameMenuScene, DeluxeScene, ChapterIntroScene, BattleScene, SettingsScene],
 });
 
 if (import.meta.env.DEV) (window as unknown as { __game: Phaser.Game }).__game = game;

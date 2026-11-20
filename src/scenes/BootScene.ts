@@ -1,4 +1,5 @@
 import Phaser from 'phaser';
+import { applyMutePreference } from '../game/ui';
 
 export class BootScene extends Phaser.Scene {
   constructor() {
@@ -61,6 +62,7 @@ export class BootScene extends Phaser.Scene {
   }
 
   create() {
+    applyMutePreference(this);
     this.scene.start('MainMenu');
   }
 }

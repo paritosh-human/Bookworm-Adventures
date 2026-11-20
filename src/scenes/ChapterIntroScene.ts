@@ -69,7 +69,7 @@ export class ChapterIntroScene extends Phaser.Scene {
   create() {
     const p = getAdvProgress(curGame());
     if (!p) {
-      this.scene.start('MainMenu');
+      this.scene.start('GameMenu', { game: curGame() });
       return;
     }
     const g = curGame();
@@ -180,7 +180,7 @@ export class ChapterIntroScene extends Phaser.Scene {
 
     for (const [x0, x1] of [[36, 135], [664, 762]] as const) {
       const [zx, zy] = L((x0 + x1) / 2, 504);
-      this.add.rectangle(zx, zy, x1 - x0, 30, 0xffffff, 0).setDepth(12).setInteractive({ useHandCursor: true }).on('pointerdown', () => this.scene.start('MainMenu'));
+      this.add.rectangle(zx, zy, x1 - x0, 30, 0xffffff, 0).setDepth(12).setInteractive({ useHandCursor: true }).on('pointerdown', () => this.scene.start('GameMenu', { game: curGame() }));
     }
   }
 }
