@@ -121,6 +121,9 @@ export class PamActor {
   private loops = 0;
   private timer?: Phaser.Time.TimerEvent;
   private textureKey: (imageName: string) => string;
+  /** image names (lowercase, "(add)" stripped) to never render — e.g. a gag prop authored
+   * to be removed only on a much later frame our looped-segment replay never reaches. */
+  private hide?: Set<string>;
 
   constructor(
     scene: Phaser.Scene,
@@ -129,11 +132,12 @@ export class PamActor {
     pam: PamInfo,
     label: string,
     textureKey: (imageName: string) => string,
-    opts: { maxSize?: number; fit?: boolean; still?: boolean } = {},
+    opts: { maxSize?: number; fit?: boolean; still?: boolean; hide?: Set<string> } = {},
   ) {
     this.scene = scene;
     this.pam = pam;
     this.textureKey = textureKey;
+    this.hide = opts.hide;
     this.root = scene.add.container(x, y);
     const main = pam.mainSprite ?? { frame: [] };
     [this.loopStart, this.loopEnd] = findLabelRange(main, label);
@@ -227,6 +231,7 @@ export class PamActor {
       if (frag.kind === 'image') {
         const img = this.pam.image[frag.resource];
         if (!img) continue;
+        if (this.hide?.has(img.name.replace(/^\(add\)/, '').toLowerCase())) continue;
         const key = this.textureKey(img.name);
         if (!this.scene.textures.exists(key)) continue;
         // The fragment's transform places the joint; the image hangs off it at

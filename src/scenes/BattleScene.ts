@@ -577,8 +577,13 @@ export class BattleScene extends Phaser.Scene {
       // projectiles / bites travel the right distance to the enemy.
       // Vol. 2's Lex pam is 800x600 with his feet ~70px higher in the canvas
       const v2 = curGame() === 'adventures2';
-      const [x, y] = v2 ? L(25, 0) : L(-120, STAGE_Y - 10 + 330 * (ACTOR_SCALE - LEX_SCALE)); // keep his feet on the same ground line
-      this.lexActor = new PamActor(this, x, y, pam, this.lexIdle(), pamImageTextureKey, { fit: false });
+      const [x, y] = v2 ? L(-70, 0) : L(-120, STAGE_Y - 10 + 330 * (ACTOR_SCALE - LEX_SCALE)); // keep his feet on the same ground line
+      // lex.pam's "engage" entrance drops an alarm clock (lex_timehelmet) on Lex's head that the data
+      // only ever clears on a "basepose" frame right before his first attack — our looped idle segment
+      // never reaches that frame, so it would otherwise sit there forever. Vol. 2's Prologue (Lex just
+      // woke up) is the one fight that's meant to show it; everywhere else, hide it.
+      const hide = v2 && this.progress.book !== 0 ? new Set(['lex_timehelmet']) : undefined;
+      this.lexActor = new PamActor(this, x, y, pam, this.lexIdle(), pamImageTextureKey, { fit: false, hide });
       this.lexActor.root.setScale(LEX_SCALE);
       this.lexActor.root.setDepth(DEPTH_ACTORS);
     } catch (err) {
@@ -1142,13 +1147,22 @@ export class BattleScene extends Phaser.Scene {
     this.updateProgress();
     setAdvProgress(curGame(), p);
 
-    this.time.delayedCall(1400, () =>
-      this.showContinue(label, () => {
-        if (label === 'Adventure Complete!') this.scene.start('MainMenu');
-        else if (chapterDone) this.scene.start('ChapterIntro');
-        else this.advanceEnemy();
-      }),
-    );
+    if (chapterDone) {
+      // Crossing into a new chapter (or finishing the Adventure) still needs a click.
+      this.time.delayedCall(1400, () =>
+        this.showContinue(label, () => {
+          if (label === 'Adventure Complete!') this.scene.start('MainMenu');
+          else this.scene.start('ChapterIntro');
+        }),
+      );
+    } else {
+      // Next enemy within the same chapter moves on by itself.
+      this.attackBtn.setVisible(false);
+      this.time.delayedCall(1400, () => {
+        this.setMessage(label, '#ffe28a');
+        this.time.delayedCall(1200, () => this.advanceEnemy());
+      });
+    }
   }
 
   /** Replaces the Attack button with a single action once the fight is decided. */
