@@ -29,3 +29,7 @@ const BOOK_MUSIC: Record<number, BookMusic> = {
 export function musicFor(book: number): BookMusic {
   return BOOK_MUSIC[book] ?? DEFAULT;
 }
+
+/** Played on the main menu and each game's Resume/New Game/Reset menu — reuses the same
+ * long ambient track as the chapter maps rather than guessing at a distinct menu cue. */
+export const MENU_TRACK = 0;
