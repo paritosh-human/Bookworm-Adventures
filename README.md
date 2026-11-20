@@ -1,16 +1,18 @@
 # Bookworm Adventures — Web Edition
 
-A combined web remake of the three PopCap games: **Bookworm Deluxe** (classic
-word puzzle), **Bookworm Adventures**, and **Bookworm Adventures Volume 2**
-(word-combat RPG). One app, one shared letter-grid/word-validation engine,
-three modes selectable from the main menu.
+A web remake of two PopCap games: **Bookworm Adventures** and **Bookworm
+Adventures Volume 2** (word-combat RPGs, built on the original decompiled
+rules/data, not approximations). A third, **Bookworm Deluxe** (classic word
+puzzle), is implemented (`DeluxeScene.ts`) but currently unreachable from the
+menu — see "Current state" below.
 
 ## Stack
 
 - TypeScript + [Phaser 3](https://phaser.io/) for rendering/scenes
 - Vite for the dev server and static build
-- `localStorage` for save data (high score + per-campaign progress) — no
-  backend, no accounts, everything stays on the player's machine
+- `localStorage` for save data (per-game progress: book/chapter/enemy, XP,
+  hearts, potions, treasures, seen hints) — no backend, no accounts,
+  everything stays on the player's machine
 
 ## Run locally
 
@@ -25,121 +27,99 @@ Open the printed `http://localhost:5173` URL.
 
 ```
 src/
-  main.ts              Phaser.Game bootstrap
+  main.ts              Phaser.Game bootstrap, registers every scene
   scenes/
-    BootScene.ts       hands off to the menu
-    MainMenuScene.ts   mode select + high score display
-    DeluxeScene.ts     classic puzzle: chain words, tiles "burn" over time
-    BattleScene.ts     RPG combat: word damage vs. a monster roster
+    BootScene.ts        preloads shared UI art, hands off to MainMenuScene
+    MainMenuScene.ts     top-level: pick a game (Adventures / Volume 2) or Settings
+    GameMenuScene.ts     per-game menu: Resume / New Game (opens the map) / Reset
+    ChapterIntroScene.ts book map: chapter select, progress, Continue/Begin
+    BattleScene.ts       the RPG battle itself: grid, attacks, dialogue, hints, XP
+    SettingsScene.ts     reset-everything + music toggle
+    DeluxeScene.ts       classic word-chain puzzle (not linked from the menu)
   game/
-    LetterGrid.ts       shared chain-select letter grid (used by both modes)
-    letterTiles.ts      letter point values / bronze-silver-gold tiers, tile RNG
-    wordValidator.ts    dictionary lookup
-    campaigns.ts        placeholder monster rosters for Adventures / Volume 2
-    saveManager.ts      localStorage read/write
-    ui.ts               shared button helper
-  assets/dictionary/words.json   167,737-word real dictionary — union of the
-                                  Deluxe and Adventures game wordlists
-  assets/adventures/creatures.json   real 155-monster roster (names + lore)
-                                      for Bookworm Adventures, Books 1-3
-  assets/adventures/creature_pam.json   creature name -> .pam file mapping
-  game/pam/             PopCap PAM (.pam) animation decoder + Phaser player
-                         (pamDecoder.ts, PamActor.ts, pamLoader.ts)
-public/deluxe/           real tile art and sound effects extracted from the
-                          original game
-public/adventures/       real Lex portraits, battle sound effects, and
-                          monster .pam animations + composited body-part art
-raw-assets/               unpacked game files (images/sounds/fonts/data) for
-                          all three games — see scripts/ for how
-scripts/
-  extract_pak.py          unpacks PopCap's .pak archive format
-  decode_wordlist.py      decodes the front-coded word list files
-  decode_pam.py           Python prototype of the .pam animation decoder
-  composite_pam_images.py  merges each body-part's color (.jpg) + alpha
-                           mask (`name_.gif`) into a proper RGBA PNG
-  build_creature_pam_manifest.py  maps creature names to .pam filenames
+    LetterGrid.ts        shared chain-select letter grid
+    letterTiles.ts       letter point values / tile RNG
+    wordValidator.ts     dictionary lookup
+    saveManager.ts       localStorage read/write (per-game AdvProgress)
+    ui.ts                shared button + music-toggle widgets
+    music.ts             background-music loader/looper (see "Background music")
+    audioSettings.ts     persisted mute on/off flag
+    cutscene.ts          plays the original .swf intros via Ruffle
+    pam/                 PopCap PAM (.pam) animation decoder + Phaser player
+                          (pamDecoder.ts, PamActor.ts, pamLoader.ts)
+    adventures/           the data-driven battle engine
+      gameData.ts          typed accessors over game_data*.json
+      gameContext.ts       which of the 2 Adventures games is active
+      rules.ts             letter bonuses, word damage, attack-urgency, gems
+      BattleModel.ts       pure battle state (hearts, ailments, mods, enemy turn)
+      defenses.ts          per-enemy armor/immunity/word-class defenses
+      treasures.ts         equipped-treasure effect combination
+      sfx.ts / musicMap.ts per-creature sound cues / per-book music tracks
+      hints.ts             first-appearance "Hint!" box copy
+      enemyOffsets.ts      manual per-pam on-screen position overrides
+  assets/dictionary/words.json       167,737-word real dictionary
+  assets/adventures/game_data.json           Adventures: books/chapters/creatures
+  assets/adventures/game_data_vol2.json      Volume 2: same shape
+  assets/adventures/{creatures,creature_pam,sounds,pam_sounds}*.json  supporting data
+public/adventures/        real Lex/monster `.pam` animations, battle art, music,
+                           sounds — gitignored (not published; see below)
+public/adventures-vol2/   same layout, for Volume 2 — gitignored
+public/deluxe/            real Deluxe tile art and sounds — gitignored
+raw-assets/                unpacked original game files — gitignored (local only)
+decompiled/                decompiled PopLua scripts (reference only) — gitignored
+scripts/                  the whole extraction/decompile/build pipeline — see
+                           individual files' docstrings; most relevant ones:
+  extract_game_data.py     .luc scripts -> game_data*.json (chapters, creatures, rules)
+  decode_pam.py            Python reference for the .pam animation format
+  prepare_adventures_assets.py / prepare_map_assets.py   raw-assets -> public/
+  build_image_index.py     per-game lowercase->real-filename index (case-sensitive hosts)
+  extract_music.sh         music.mo3 -> public/adventures/music/song_NN.ogg
+  asset_audit.py           regenerates ASSETS_TRACKER.md / ASSETS_UNUSED.txt
 ```
 
-## Current state (iteration 4 — real animated monster art)
+## Current state
 
-The three original game zips (`~/Downloads/Bookworm-*.zip`) have been
-unpacked into `raw-assets/` (`deluxe/`, `adventures/`, `adventures-vol2/`).
-`scripts/extract_pak.py` and `scripts/decode_wordlist.py` do the unpacking —
-see those files for the reverse-engineered `.pak` and front-coded wordlist
-formats.
+Both Adventures games are fully playable end to end: real chapter/enemy
+order per book, real per-chapter arenas, gems/tile statuses, enemy defenses,
+dialogue, attack choreography, potions/treasures, XP/leveling, first-time
+hint boxes, a chapter-select map, and now real background music (see below).
+Progress is saved per game in `localStorage` and survives reloads.
 
-**Bookworm Deluxe is now wired to the real assets:**
-- Real dictionary: 151,477 words decoded from the game's own `wordlist.txt`
-  + `bonus_word_dictionary.txt` (`src/assets/dictionary/words.json`),
-  replacing the earlier system-dictionary placeholder.
-- Real tile art and board backdrop (`public/deluxe/images/`) and real sound
-  effects for click/success/fail/game-over (`public/deluxe/sounds/`).
-- Letter point values and frequencies are still an approximation (Scrabble-
-  style) — the real tables are compiled into `BookWorm.exe`, not stored as
-  data, so they weren't extractable without decompiling native code.
-- The tile art only distinguishes two visual tiers (plain wood vs. gold), so
-  bronze/silver share one sprite (`DELUXE_TILE_TEXTURES` in
-  `src/game/letterTiles.ts`).
-- The mobile-responsive canvas scaling (`Phaser.Scale.FIT` in `src/main.ts`)
-  and the `#app`/`html`/`body` sizing in `src/style.css` were both fixed
-  this pass — the canvas previously had no real parent size to fit into, so
-  it just got cropped instead of scaled on narrow (phone) viewports.
+**Bookworm Deluxe** has real tile art, sounds, and dictionary wired up
+(`DeluxeScene.ts`), but its menu button was removed — the main menu is
+Adventures-only for now. The scene is still registered in `main.ts` if it
+gets re-added later.
 
-**Bookworm Adventures is now wired to a real monster roster:**
-- 155 real monsters (`src/assets/adventures/creatures.json`) from the
-  original Books 1-3, with real names and real flavor-text lore, replacing
-  the 3 placeholder monsters.
-- Real Lex portraits (happy/worried, swapped based on battle outcome) and
-  real battle sound effects (`public/adventures/`).
-- HP/attack values are still an approximated difficulty curve scaled across
-  the roster — the real per-monster combat stats are compiled into PopCap
-  Lua bytecode (`.luc` files in `raw-assets/adventures/scripts/creatures/`),
-  not stored as plain data. Decompiling those would be a separate, sizeable
-  task.
-- **Real animated monster art.** Monster art in the original game is
-  piece-based `.pam` (PopCap AniMation) data — body, jaw, legs, eyes etc. as
-  separate color+alpha-mask image pairs, assembled and animated by a
-  proprietary binary format with no public spec for this (2008-era, version
-  1) variant. It's been fully reverse-engineered — see `src/game/pam/` for
-  the decoder/player and `scripts/decode_pam.py` for the byte-exact-verified
-  prototype (parses every sample file down to the last byte with zero left
-  over). `PamActor` replays a named segment (e.g. "idle") using Phaser
-  containers to handle the format's nested symbol-instance transforms, and
-  auto-fits each creature to a consistent on-screen size since their
-  internal coordinate origins vary per file.
-  - 136/155 creatures are matched to a real `.pam` file
-    (`scripts/build_creature_pam_manifest.py` — filenames use abbreviated,
-    stage-numbered names that don't match the roster 1:1); the rest fall
-    back to text/lore-only.
-  - A key format quirk: a named segment like "idle" is often just a label
-    with no appends of its own — it keeps animating fragments an *earlier*
-    segment (e.g. "intro") already added and never removed, so playback
-    always replays cumulatively from frame 0, not from the segment's own
-    start.
-  - Rotation/matrix transforms, nested sprite-of-sprite recursion, and
-    per-fragment add/move/remove timelines are all implemented; color-tint
-    frames are applied as alpha only (no RGB tinting yet).
+**Approximated** (the original keeps these in native code or compiled Lua
+bytecode, not extractable as plain data): Deluxe's letter point values
+(Scrabble-style), the XP/level curve, level-up bonus sizes, gem drop
+percentages, potion drop chance, plague spread, Scramble costing a turn.
+These are tagged `APPROX` in the source — replace if real values turn up.
 
-**Real intro cutscene.** The original game's intro is a Flash (`.swf`)
-animation — Flash itself was discontinued in 2020, so no browser can play it
-natively. It's now played via [Ruffle](https://ruffle.rs), an open-source
-WASM Flash emulator, showing the *actual* original cutscene file rather than
-a re-encoded video (`src/game/cutscene.ts`, triggered from the main menu
-before entering Bookworm Adventures). This pulled Ruffle's self-hosted
-runtime into `public/ruffle/` (~28MB of WASM — the main reason the build
-jumped from 33MB to ~63MB) and the cutscene file into
-`public/adventures/cutscenes/`. The 3 remaining Adventures cutscenes
-(per-book intros/endings) and Volume 2's 5 cutscenes are extracted but not
-wired up yet — see `ASSETS.md`.
+**Real intro cutscenes.** The original per-game intros are Flash (`.swf`)
+animations, played via [Ruffle](https://ruffle.rs) (an open-source WASM
+Flash emulator) so the *actual* original file plays, not a re-encoded video
+(`src/game/cutscene.ts`). They have no embedded audio — confirmed by
+decompressing the `.swf` and checking every tag/string in it, not just by
+absence of sound.
 
-**Bookworm Adventures Volume 2** (not yet started): real sprites/sounds/fonts
-are sitting in `raw-assets/adventures-vol2/images|sounds|fonts` in standard
-formats, same caveats as above apply.
+See [ASSETS_TRACKER.md](ASSETS_TRACKER.md) / [ASSETS_UNUSED.txt](ASSETS_UNUSED.txt)
+(regenerate with `python3 scripts/asset_audit.py`) for what fraction of each
+game's extracted files are actually wired into the app.
 
-See [ASSETS.md](ASSETS.md) for a running inventory of every extracted asset
-category across all three games and whether it's actually wired into the app
-yet — there's a lot still sitting unused (minigames, treasure/item art, book
-cover art, hall-of-fame UI, board backdrops for battle mode, etc.).
+## Repository / assets are not published
+
+Per project policy, extracted game art/audio/data (`raw-assets/`,
+`decompiled/`, `public/adventures*/{images,sounds,pam,cutscenes,music}`,
+`public/deluxe/`) are **gitignored** — only source code is committed/pushed.
+Keep them that way; don't `git add -f` these paths. If you need a fresh
+checkout, re-run the `scripts/prepare_*`/`extract_*` pipeline against your
+own copy of the original game files.
+
+The repo's git history was rewritten once (via `git-filter-repo`) to purge
+an earlier accidental commit of these asset directories — if you have an
+older clone, don't `git pull` it (history diverged); re-clone instead, or
+`git fetch && git reset --hard origin/main`.
 
 ## Hosting (later)
 
