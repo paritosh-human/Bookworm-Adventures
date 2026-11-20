@@ -3,7 +3,12 @@ dist
 .DS_Store
 *.log
 raw-assets/
+decompiled/
 /tmp/
 public/adventures-vol2/
 public/adventures/sounds/
 public/adventures/music/
+public/adventures/images/
+public/adventures/cutscenes/
+public/adventures/pam/
+public/deluxe/
