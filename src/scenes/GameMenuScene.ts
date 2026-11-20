@@ -1,5 +1,5 @@
 import Phaser from 'phaser';
-import { createMusicToggle, makeButton } from '../game/ui';
+import { createFullscreenToggle, createMusicToggle, makeButton } from '../game/ui';
 import { playMusic } from '../game/music';
 import { MENU_TRACK } from '../game/adventures/musicMap';
 import { clearAdvProgress, getAdvProgress, newAdvProgress, setAdvProgress } from '../game/saveManager';
@@ -26,13 +26,14 @@ export class GameMenuScene extends Phaser.Scene {
   }
 
   create() {
-    const { width } = this.scale;
+    const { width, height } = this.scale;
     const g = this.game_;
     const info = TITLES[g];
     setGame(g);
     playMusic(this, MENU_TRACK);
 
     createMusicToggle(this, width - 40, 40);
+    createFullscreenToggle(this, width - 40, height - 40);
 
     this.add.text(width / 2, 90, info.label, { fontFamily: 'Georgia, serif', fontSize: '32px', color: '#f2e6c9' }).setOrigin(0.5);
 

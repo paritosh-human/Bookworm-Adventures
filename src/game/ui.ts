@@ -63,6 +63,59 @@ export function applyMutePreference(scene: Phaser.Scene): void {
   scene.sound.mute = isMuted();
 }
 
+/** Fullscreen toggle badge. On phones, entering fullscreen also requests a landscape
+ * orientation lock — the lock only takes effect while fullscreen (and only on browsers that
+ * support the Screen Orientation API, e.g. Android Chrome; iOS Safari has no lock API at all,
+ * so there it's a no-op and the player just rotates manually). */
+export function createFullscreenToggle(scene: Phaser.Scene, x: number, y: number, radius = 20): Phaser.GameObjects.Container {
+  const bg = scene.add.circle(0, 0, radius, 0x3b2a1a).setStrokeStyle(2, 0xd4af37);
+  const icon = scene.add.graphics();
+  const container = scene.add.container(x, y, [bg, icon]);
+  bg.setInteractive({ useHandCursor: true });
+
+  const draw = () => {
+    const full = scene.scale.isFullscreen;
+    icon.clear();
+    icon.lineStyle(2.5, 0xf2e6c9, 1);
+    // four corner brackets; pointing inward when fullscreen, outward otherwise
+    const a = full ? 5 : 3;
+    const b = full ? 3 : 5;
+    const corners: [number, number, number, number][] = [
+      [-11, -11, -11 + b, -11 + a],
+      [-11, -11, -11 + a, -11 + b],
+      [11, -11, 11 - b, -11 + a],
+      [11, -11, 11 - a, -11 + b],
+      [-11, 11, -11 + b, 11 - a],
+      [-11, 11, -11 + a, 11 - b],
+      [11, 11, 11 - b, 11 - a],
+      [11, 11, 11 - a, 11 - b],
+    ];
+    icon.beginPath();
+    for (const [sx, sy, ex, ey] of corners) {
+      icon.moveTo(sx, sy);
+      icon.lineTo(ex, ey);
+    }
+    icon.strokePath();
+  };
+  draw();
+
+  bg.on('pointerover', () => bg.setFillStyle(0x543c24));
+  bg.on('pointerout', () => bg.setFillStyle(0x3b2a1a));
+  bg.on('pointerdown', () => {
+    if (scene.scale.isFullscreen) {
+      scene.scale.stopFullscreen();
+    } else {
+      scene.scale.startFullscreen();
+      const orientation = screen.orientation as ScreenOrientation & { lock?: (o: string) => Promise<void> };
+      orientation.lock?.('landscape').catch(() => {});
+    }
+  });
+  scene.scale.on('enterfullscreen', draw);
+  scene.scale.on('leavefullscreen', draw);
+
+  return container;
+}
+
 export function makeButton(
   scene: Phaser.Scene,
   x: number,

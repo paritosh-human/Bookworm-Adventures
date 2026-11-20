@@ -6,11 +6,13 @@ html, body {
   background: #14100b;
   font-family: Georgia, 'Times New Roman', serif;
   overflow: hidden;
+  overscroll-behavior: none;
 }
 
 #app {
   width: 100vw;
   height: 100vh;
+  height: 100dvh;
 }
 
 canvas {
@@ -59,5 +61,44 @@ canvas {
 }
 
 #cutscene-skip:hover {
+  background: #543c24;
+}
+
+#rotate-overlay {
+  display: none;
+  position: fixed;
+  inset: 0;
+  z-index: 200;
+  background: #14100b;
+  color: #f2e6c9;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 20px;
+  text-align: center;
+  padding: 24px;
+}
+
+#rotate-overlay.show {
+  display: flex;
+}
+
+#rotate-overlay p {
+  font-size: 18px;
+  max-width: 320px;
+}
+
+#rotate-fullscreen-btn {
+  padding: 14px 28px;
+  background: #3b2a1a;
+  color: #f2e6c9;
+  border: 2px solid #d4af37;
+  border-radius: 4px;
+  font-family: Georgia, 'Times New Roman', serif;
+  font-size: 17px;
+  cursor: pointer;
+}
+
+#rotate-fullscreen-btn:hover {
   background: #543c24;
 }

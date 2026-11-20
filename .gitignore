@@ -12,3 +12,10 @@ public/adventures/images/
 public/adventures/cutscenes/
 public/adventures/pam/
 public/deluxe/
+
+# wrangler files
+.wrangler
+.dev.vars*
+!.dev.vars.example
+.env*
+!.env.example

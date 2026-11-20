@@ -584,9 +584,9 @@ export class BattleScene extends Phaser.Scene {
       const [x, y] = v2 ? L(-50, 0) : L(-120, STAGE_Y - 10 + 330 * (ACTOR_SCALE - LEX_SCALE)); // keep his feet on the same ground line
       // lex.pam's "engage" entrance drops an alarm clock (lex_timehelmet) on Lex's head that the data
       // only ever clears on a "basepose" frame right before his first attack — our looped idle segment
-      // never reaches that frame, so it would otherwise sit there forever. Vol. 2's Prologue (Lex just
-      // woke up) is the one fight that's meant to show it; everywhere else, hide it.
-      const hide = v2 && this.progress.book !== 0 ? new Set(['lex_timehelmet']) : undefined;
+      // never reaches that frame, so it would otherwise sit there forever. It overlaps messily with his
+      // glasses at this render scale, so it's hidden everywhere, including Vol. 2's Prologue sight gag.
+      const hide = v2 ? new Set(['lex_timehelmet']) : undefined;
       this.lexActor = new PamActor(this, x, y, pam, this.lexIdle(), pamImageTextureKey, { fit: false, hide });
       this.lexActor.root.setScale(LEX_SCALE);
       this.lexActor.root.setDepth(DEPTH_ACTORS);
